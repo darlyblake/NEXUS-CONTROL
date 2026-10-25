@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check,
@@ -217,19 +217,19 @@ function App() {
   );
 }
 
-function StatCard({ icon, label, value, foot, tone }: { icon: React.ReactNode; label: string; value: string; foot: string; tone: string }) {
+function StatCard({ icon, label, value, foot, tone }: { icon: ReactNode; label: string; value: string; foot: string; tone: string }) {
   return <div className="stat-card"><div className="stat-top"><div className={`stat-icon ${tone}`}>{icon}</div><span className="stat-context">LOCAL</span></div><div className="stat-label">{label}</div><div className="stat-value">{value}</div><div className="stat-foot">{foot}</div></div>;
 }
-function IntegrationRow({ icon, name, description, status, good }: { icon: React.ReactNode; name: string; description: string; status: string; good: boolean }) {
+function IntegrationRow({ icon, name, description, status, good }: { icon: ReactNode; name: string; description: string; status: string; good: boolean }) {
   return <div className="integration-row"><div className="integration-icon">{icon}</div><div className="integration-copy"><strong>{name}</strong><span>{description}</span></div><span className={`integration-status ${good ? "status-good" : "status-neutral"}`}><span className="status-dot"/>{status}</span></div>;
 }
-function QuickAction({ icon, title, desc, onClick }: { icon: React.ReactNode; title: string; desc: string; onClick: () => void }) {
+function QuickAction({ icon, title, desc, onClick }: { icon: ReactNode; title: string; desc: string; onClick: () => void }) {
   return <button className="quick-action" onClick={onClick}><div className="quick-icon">{icon}</div><div><strong>{title}</strong><span>{desc}</span></div><ArrowUpRight size={15} className="quick-arrow"/></button>;
 }
-function ConnectorCard({ icon, title, category, description, state, tone, action }: { icon: React.ReactNode; title: string; category: string; description: string; state: string; tone: string; action: () => void }) {
+function ConnectorCard({ icon, title, category, description, state, tone, action }: { icon: ReactNode; title: string; category: string; description: string; state: string; tone: string; action: () => void }) {
   return <div className="connector-card"><div className="connector-top"><div className="connector-icon">{icon}</div><span className={`connector-state ${tone}`}><span className="status-dot"/>{state}</span></div><div className="connector-category">{category}</div><h3>{title}</h3><p>{description}</p><button className="connector-action" onClick={action}>Configurer / vérifier <ArrowUpRight size={15}/></button></div>;
 }
-function EmptyState({ icon, title, description, action, onAction }: { icon: React.ReactNode; title: string; description: string; action: string; onAction: () => void }) {
+function EmptyState({ icon, title, description, action, onAction }: { icon: ReactNode; title: string; description: string; action: string; onAction: () => void }) {
   return <div className="empty-state"><div className="empty-state-icon">{icon}</div><h3>{title}</h3><p>{description}</p><button className="button button-secondary" onClick={onAction}>{action}</button></div>;
 }
 function SecurityRow({ title, detail, state, good }: { title: string; detail: string; state: string; good: boolean }) {
