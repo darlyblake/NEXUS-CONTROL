@@ -19,39 +19,15 @@ struct AndroidDevice {
 }
 
 fn command_exists(program: &str) -> bool {
-    Command::new("which")
+    let finder = if cfg!(target_os = "windows") { "where.exe" } else { "which" };
+    Command::new(finder)
         .arg(program)
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)
 }
 
-#[tauri::command]
-fn get_local_tools() -> Vec<LocalTool> {
-    let checks = [
-        ("adb", "Android Debug Bridge", "Détection des appareils Android autorisés"),
-        ("scrcpy", "scrcpy", "Affichage et contrôle d'écran Android"),
-        ("node", "Node.js", "Runtime utilisé notamment pour les outils intégrés"),
-        ("meshcentral", "MeshCentral CLI", "Présence de la commande MeshCentral dans le PATH"),
-        ("wg", "WireGuard", "Outils du réseau privé distant"),
-    ];
-
-    checks
-        .iter()
-        .map(|(id, label, detail)| {
-            let installed = command_exists(id);
-            LocalTool {
-                id: (*id).to_string(),
-                label: (*label).to_string(),
-                installed,
-                detail: (*detail).to_string(),
-            }
-        })
-        .collect()
-}
-
-#[tauri::command]
-fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
+fn read_android_devices() -> Result<Vec<AndroidDevice>, String> {
     if !command_exists("adb") {
         return Ok(Vec::new());
     }
@@ -84,7 +60,6 @@ fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
             Some(value) => value,
             None => continue,
         };
-
         let model = line
             .split_whitespace()
             .find_map(|part| part.strip_prefix("model:"))
@@ -101,11 +76,65 @@ fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
     Ok(devices)
 }
 
+#[tauri::command]
+fn get_local_tools() -> Vec<LocalTool> {
+    let checks = [
+        ("adb", "Android Debug Bridge", "Détection des appareils Android autorisés"),
+        ("scrcpy", "scrcpy", "Affichage et contrôle d'écran Android"),
+        ("node", "Node.js", "Runtime utilisé par certains outils intégrés"),
+        ("meshcentral", "MeshCentral CLI", "Commande MeshCentral disponible dans le PATH"),
+        ("wg", "WireGuard", "Outils du réseau privé distant"),
+    ];
+
+    checks
+        .iter()
+        .map(|(id, label, detail)| LocalTool {
+            id: (*id).to_string(),
+            label: (*label).to_string(),
+            installed: command_exists(id),
+            detail: (*detail).to_string(),
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
+    read_android_devices()
+}
+
+#[tauri::command]
+fn launch_scrcpy(serial: String) -> Result<(), String> {
+    if serial.trim().is_empty() {
+        return Err("Identifiant Android manquant.".to_string());
+    }
+    if !command_exists("scrcpy") {
+        return Err("scrcpy n'est pas installé ou n'est pas disponible dans le PATH.".to_string());
+    }
+
+    // Revalidate the selected serial against the live ADB list before starting a viewer.
+    let devices = read_android_devices()?;
+    let is_authorized_and_online = devices
+        .iter()
+        .any(|device| device.id == serial && device.state == "device");
+
+    if !is_authorized_and_online {
+        return Err("Cet appareil n'est pas connecté ou n'a pas autorisé le débogage USB.".to_string());
+    }
+
+    Command::new("scrcpy")
+        .arg("--serial")
+        .arg(&serial)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("Impossible de lancer scrcpy : {error}"))
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_local_tools,
-            scan_android_devices
+            scan_android_devices,
+            launch_scrcpy
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");
