@@ -2,36 +2,45 @@
 
 Application de bureau open source pour administrer les appareils personnels depuis une interface unifiée.
 
-## Stratégie
+## Fonctionnalités de la première version
 
-NEXUS CONTROL réutilise des outils existants au lieu de réimplémenter les protocoles de contrôle à distance :
+- Interface de bureau Tauri 2 + React + TypeScript.
+- Tableau de bord et navigation en français.
+- Détection locale des outils ADB, scrcpy, Node.js, MeshCentral CLI et WireGuard.
+- Découverte des appareils Android via `adb devices -l`.
+- Lancement de scrcpy depuis la fiche d'un appareil, après validation qu'il est toujours connecté et autorisé.
+- Pages de préparation des intégrations, sécurité, journal et paramètres.
 
-- **Tauri 2 + React + TypeScript** : application de bureau.
-- **MeshCentral** : gestion à distance des ordinateurs Windows/Linux.
-- **scrcpy + ADB** : affichage et contrôle des appareils Android autorisés.
-- **WireGuard** : réseau privé pour l'accès distant, ajouté après validation du réseau local.
-- **Connecteurs futurs** : Android TV, Home Assistant, gestion Apple/MDM selon les capacités et autorisations des appareils.
+Les fonctions de bureau distant MeshCentral, transfert de fichiers, scripts, automatisations, Android TV, Home Assistant et gestion Apple restent à intégrer. L'interface indique leur état sans prétendre qu'elles sont déjà opérationnelles.
 
-## État du projet
+## Architecture
 
-Phase initiale : structure, documentation, préparation de l'environnement Ubuntu et tests locaux. Les fonctions de contrôle ne sont pas encore intégrées à l'interface.
+- **Tauri 2 + React + TypeScript** : application de bureau multiplateforme.
+- **MeshCentral** : intégration prévue pour les ordinateurs Windows/Linux.
+- **scrcpy + ADB** : premier connecteur Android local.
+- **WireGuard** : accès distant privé, à configurer après validation de la sécurité locale.
+- **Connecteurs futurs** : Android TV, Home Assistant et gestion Apple/MDM selon les capacités autorisées.
 
-## Prérequis de développement
-
-- Ubuntu 24.04 ou compatible
-- Git, Node.js LTS et npm
-- Rust via rustup
-- Dépendances système Tauri 2
-- Android Platform Tools (ADB) pour les tests Android
-
-## Démarrage
+## Installation
 
 Voir [Installation Ubuntu](docs/installation-ubuntu.md).
 
+Depuis le dossier de l'application :
+
+```bash
+cd apps/desktop
+npm install
+npm run tauri dev
+```
+
 ## Sécurité
 
-Ne pas exposer ADB, les terminaux ni les interfaces d'administration directement sur Internet. Commencer sur le réseau local, utiliser des identités individuelles par appareil et demander une confirmation avant toute action sensible. Voir [Sécurité](docs/security.md).
+Ne pas exposer ADB, les terminaux ni les interfaces d'administration directement sur Internet. Le contrôle Android requiert l'autorisation explicite du téléphone. Voir [Sécurité](docs/security.md).
+
+## Validation continue
+
+Un workflow GitHub Actions vérifie le build frontend et la compilation Rust sur Ubuntu.
 
 ## Licence
 
-À définir avant une première publication stable. Les licences des outils intégrés restent distinctes ; consulter leurs dépôts officiels.
+MIT — voir [LICENSE](LICENSE). Les logiciels intégrés restent soumis à leurs licences respectives.
