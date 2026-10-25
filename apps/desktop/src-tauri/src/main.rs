@@ -627,6 +627,85 @@ fn open_remote_console(url: String) -> Result<String, String> {
         .map_err(|error| format!("Impossible d'ouvrir la console distante : {error}"))
 }
 
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuditCheck {
+    id: String,
+    label: String,
+    status: String,
+    detail: String,
+}
+
+fn audit_tool(id: &str, label: &str, args: &[&str]) -> AuditCheck {
+    if !command_exists(id) {
+        return AuditCheck {
+            id: id.to_string(),
+            label: label.to_string(),
+            status: "Absent".to_string(),
+            detail: format!("{id} n'est pas disponible dans le PATH de cette application."),
+        };
+    }
+
+    let version = Command::new(id).args(args).output().ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8_lossy(&output.stdout).lines()
+            .chain(String::from_utf8_lossy(&output.stderr).lines())
+            .find(|line| !line.trim().is_empty()).map(|line| line.trim().to_string()));
+
+    AuditCheck {
+        id: id.to_string(),
+        label: label.to_string(),
+        status: "Disponible".to_string(),
+        detail: version.unwrap_or_else(|| "Commande détectée ; version non retournée par cet outil.".to_string()),
+    }
+}
+
+#[tauri::command]
+fn get_security_audit() -> Vec<AuditCheck> {
+    let mut checks = vec![
+        audit_tool("nmap", "Nmap", &["--version"]),
+        audit_tool("arp-scan", "arp-scan", &["--version"]),
+        audit_tool("netdiscover", "Netdiscover", &["-h"]),
+        audit_tool("tshark", "Wireshark / TShark", &["--version"]),
+        audit_tool("wg", "WireGuard", &["--version"]),
+    ];
+
+    #[cfg(target_os = "linux")]
+    {
+        if !command_exists("ufw") {
+            checks.push(AuditCheck {
+                id: "ufw".to_string(),
+                label: "Pare-feu UFW".to_string(),
+                status: "Absent".to_string(),
+                detail: "UFW n'est pas installé ; vérifie quel pare-feu est utilisé sur ce système.".to_string(),
+            });
+        } else {
+            let output = Command::new("ufw").arg("status").output();
+            let detail = output.as_ref().ok()
+                .map(|value| String::from_utf8_lossy(&value.stdout).trim().to_string())
+                .unwrap_or_else(|| "Impossible de lire l'état UFW.".to_string());
+            let active = detail.lines().any(|line| line.trim().eq_ignore_ascii_case("Status: active"));
+            checks.push(AuditCheck {
+                id: "ufw".to_string(),
+                label: "Pare-feu UFW".to_string(),
+                status: if active { "Actif".to_string() } else { "À vérifier".to_string() },
+                detail,
+            });
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    checks.push(AuditCheck {
+        id: "firewall".to_string(),
+        label: "Pare-feu du système".to_string(),
+        status: "À vérifier".to_string(),
+        detail: "La lecture automatique du pare-feu n'est pas encore implémentée pour ce système.".to_string(),
+    });
+
+    checks
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
