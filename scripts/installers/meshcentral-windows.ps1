@@ -61,7 +61,7 @@ if (-not (Test-Path $ConfigPath)) {
   "domains": {
     "": {
       "title": "NEXUS CONTROL - MeshCentral local",
-      "newAccounts": true,
+      "newAccounts": false,
       "localSessionRecording": false
     }
   }
