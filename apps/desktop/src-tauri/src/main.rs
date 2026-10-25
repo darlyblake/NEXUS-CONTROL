@@ -292,18 +292,19 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
         let mac = network_mac(&ip);
         let hostname = network_hostname(&ip);
         let manufacturer = network_vendor(&mac);
-        let lower = format!("{} {}", hostname.to_lowercase(), manufacturer.to_lowercase());
+        let host_lower = hostname.to_lowercase();
+        let lower = format!("{} {}", host_lower, manufacturer.to_lowercase());
         let mut evidence = Vec::new();
         if !hostname.is_empty() { evidence.push(format!("Nom d'hôte résolu localement : {}", hostname)); }
         if !mac.is_empty() { evidence.push(format!("Adresse MAC présente dans la table des voisins : {}", mac)); }
         if manufacturer != "Non identifié" { evidence.push(format!("Fabricant associé au préfixe MAC dans la base locale Nmap : {}", manufacturer)); }
         evidence.push("Hôte détecté par découverte réseau ; aucun scan de ports n'a été lancé".to_string());
-        let device_type = if ["android", "iphone", "ipad", "phone", "mobile", "tecno", "infinix", "itel", "samsung", "pixel", "redmi", "xiaomi", "oppo", "vivo", "huawei"].iter().any(|v| lower.contains(v)) {
-            "phone"
-        } else if ["smart-tv", "smarttv", "television", "android-tv", "roku", "chromecast", "firetv", "tv-", "box"].iter().any(|v| lower.contains(v)) {
+        let device_type = if ["smart-tv", "smarttv", "television", "android-tv", "roku", "chromecast", "firetv", "tv-", "box"].iter().any(|v| host_lower.contains(v)) {
             "tv"
-        } else if ["router", "gateway", "access-point", "access point", "ubiquiti", "mikrotik", "tp-link", "tplink", "cisco", "netgear"].iter().any(|v| lower.contains(v)) {
+        } else if ["router", "gateway", "access-point", "access point", "mikrotik", "tp-link", "tplink", "cisco", "netgear"].iter().any(|v| host_lower.contains(v)) {
             "network"
+        } else if ["android", "iphone", "ipad", "phone", "mobile", "tecno", "infinix", "itel", "galaxy", "pixel", "redmi", "xiaomi", "oppo", "vivo", "huawei"].iter().any(|v| host_lower.contains(v)) {
+            "phone"
         } else if !hostname.is_empty() {
             "computer"
         } else {
