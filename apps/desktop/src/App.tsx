@@ -400,21 +400,37 @@ function App() {
               <div className="panel-header"><div><h3>Résultats du scan</h3><p>Les noms, fabricants et modèles sont séparés des hypothèses de type.</p></div><span className="count-pill">{networkDevices.length} appareil(s)</span></div>
               <div className="network-filters">
                 <label>Type d'appareil<select value={networkTypeFilter} onChange={e => setNetworkTypeFilter(e.target.value)}><option value="all">Tous les appareils</option><option value="phone">Téléphones / tablettes</option><option value="computer">Ordinateurs</option><option value="tv">Téléviseurs / boîtiers</option><option value="network">Routeurs / équipements réseau</option><option value="unknown">Non identifié</option></select></label>
-                <label>Connexion<select value={networkConnectionFilter} onChange={e => setNetworkConnectionFilter(e.target.value)}><option value="all">Toutes les connexions</option><option value="network">Wi-Fi / Ethernet</option></select></label>
+                <label>Connexion<select value={networkConnectionFilter} onChange={e => setNetworkConnectionFilter(e.target.value)}><option value="all">Toutes les connexions</option><option value="network">Wi-Fi / Ethernet</option><option value="adb">USB / ADB</option></select></label>
                 <label className="network-search">Rechercher<input value={networkSearch} onChange={e => setNetworkSearch(e.target.value)} placeholder="Nom, fabricant, IP ou MAC…"/></label>
               </div>
               {(() => {
-                const filtered = networkDevices.filter(device => {
+                const networkItems = networkDevices.slice();
+                const adbItems: NetworkDevice[] = android.map(device => ({
+                  ip: device.id.includes(":") ? device.id.split(":")[0] : "—",
+                  hostname: device.model && device.model !== "Android" ? device.model : device.id,
+                  mac: "",
+                  kind: "Appareil Android détecté par ADB",
+                  manufacturer: "Non identifié",
+                  model: device.model && device.model !== "Android" ? device.model : "Modèle non communiqué par ADB",
+                  deviceType: "phone",
+                  osGuess: "Android (confirmé par ADB)",
+                  evidence: ["Appareil retourné par ADB", "État ADB : " + device.state],
+                  connection: device.id.includes(":") ? "Wi-Fi / ADB" : "USB / ADB",
+                  adbStatus: device.state
+                }));
+                const allItems = [...networkItems, ...adbItems.filter(item => !networkItems.some(net => net.ip === item.ip && item.ip !== "—"))];
+                const filtered = allItems.filter(device => {
                   const type = device.deviceType || "unknown";
+                  const connection = device.connection.includes("ADB") ? "adb" : "network";
                   const search = networkSearch.trim().toLowerCase();
                   return (networkTypeFilter === "all" || type === networkTypeFilter)
-                    && (networkConnectionFilter === "all" || networkConnectionFilter === "network")
+                    && (networkConnectionFilter === "all" || connection === networkConnectionFilter)
                     && (!search || [device.hostname, device.manufacturer, device.model, device.ip, device.mac, device.kind].some(value => value.toLowerCase().includes(search)));
                 });
-                if (networkScanning && networkDevices.length === 0) return <div className="network-empty"><Radar size={27} className="spin"/><strong>Recherche des appareils sur le réseau…</strong><span>Cette opération peut prendre quelques secondes.</span></div>;
-                if (!filtered.length) return <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil correspondant" description={networkDevices.length ? "Modifie les filtres ou le texte de recherche." : "Vérifie que les appareils sont sur le même réseau. Certains appareils restent invisibles aux méthodes de découverte."} action="Réessayer l'analyse" onAction={() => void scanNetwork()}/>;
+                if (networkScanning && allItems.length === 0) return <div className="network-empty"><Radar size={27} className="spin"/><strong>Recherche des appareils sur le réseau…</strong><span>Cette opération peut prendre quelques secondes.</span></div>;
+                if (!filtered.length) return <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil correspondant" description={allItems.length ? "Modifie les filtres ou le texte de recherche." : "Vérifie que les appareils sont sur le même réseau. Certains appareils restent invisibles aux méthodes de découverte."} action="Réessayer l'analyse" onAction={() => void scanNetwork()}/>;
                 return <div className="network-device-grid">{filtered.map((device) => <article className="network-device-card" key={device.ip}>
-                  <div className="network-device-top"><div className="network-device-icon">{device.deviceType === "phone" ? <Smartphone size={20}/> : device.deviceType === "tv" ? <Tv size={20}/> : device.deviceType === "computer" ? <Monitor size={20}/> : <MonitorSmartphone size={20}/>}</div><span className="state-pill state-ready"><span className="status-dot"/>En ligne</span></div>
+                  <div className="network-device-top"><div className="network-device-icon">{device.deviceType === "phone" ? <Smartphone size={20}/> : device.deviceType === "tv" ? <Tv size={20}/> : device.deviceType === "computer" ? <Monitor size={20}/> : <MonitorSmartphone size={20}/>}</div><span className="state-pill state-ready"><span className="status-dot"/>{device.connection.includes("ADB") ? device.adbStatus : "En ligne"}</span></div>
                   <h3>{device.hostname || (device.manufacturer !== "Non identifié" ? device.manufacturer + " — appareil" : "Appareil non identifié")}</h3><p className="network-device-kind">{device.kind}</p>
                   <div className="network-info-row"><span>Type</span><strong>{device.deviceType === "phone" ? "Téléphone / tablette probable" : device.deviceType === "computer" ? "Ordinateur probable" : device.deviceType === "tv" ? "Téléviseur / boîtier probable" : device.deviceType === "network" ? "Équipement réseau probable" : "Non identifié"}</strong></div>
                   <div className="network-info-row"><span>Fabricant</span><strong>{device.manufacturer || "Non identifié"}</strong></div>
@@ -425,7 +441,7 @@ function App() {
                   <div className="network-info-row"><span>Connexion</span><strong>{device.connection || "Réseau local"}</strong></div>
                   <button className="button button-secondary full-button" onClick={() => setExpandedDevice(expandedDevice === device.ip ? null : device.ip)}><CircleHelp size={14}/>{expandedDevice === device.ip ? "Masquer les indices" : "Voir les détails et les indices"}</button>
                   {expandedDevice === device.ip && <div className="network-evidence"><strong>Indices utilisés</strong><ul>{(device.evidence?.length ? device.evidence : ["Aucun indice complémentaire disponible"]).map((item, index) => <li key={index}>{item}</li>)}</ul><p>Le type est une estimation. Le modèle exact reste inconnu tant qu'une source fiable ne le fournit pas.</p></div>}
-                  <button className="button button-primary full-button" disabled={!!connectingIp || !tools.some(t => t.id === "adb" && t.installed) || !/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(device.ip)} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>
+                  {!device.connection.includes("ADB") && <button className="button button-primary full-button" disabled={!!connectingIp || !tools.some(t => t.id === "adb" && t.installed) || device.ip === "—"} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>}
                 </article>)}</div>;
               })()}
             </div>
