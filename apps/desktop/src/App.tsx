@@ -173,6 +173,25 @@ function App() {
     }
   }, []);
 
+  const runSecurityAudit = useCallback(async () => {
+    if (!isDesktopRuntime()) {
+      setNotice("L'audit local nécessite l'application de bureau NEXUS CONTROL.");
+      return;
+    }
+    setRunningAudit(true);
+    setNotice("Vérification locale des outils et du pare-feu…");
+    try {
+      const checks = await invoke<AuditCheck[]>("get_security_audit");
+      setAuditChecks(checks);
+      const available = checks.filter((check) => check.status === "Disponible" || check.status === "Actif").length;
+      setNotice(`Audit local terminé : ${available}/${checks.length} contrôles disposent d'un outil ou d'une protection détectée. Aucun hôte externe n'a été scanné.`);
+    } catch (error) {
+      setNotice("L'audit local a échoué : " + String(error));
+    } finally {
+      setRunningAudit(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshLocal();
     if (isDesktopRuntime()) {
