@@ -29,4 +29,5 @@
 .remote-server-input:focus{border-color:#5c83c7;box-shadow:0 0 0 3px #5c83c71c}
 .remote-actions{padding:0 15px 16px;justify-content:flex-start}
 @media(max-width:700px){.remote-actions{flex-wrap:wrap}.remote-server-input{width:calc(100% - 30px)}}
-\n.security-hero .button{margin-left:auto;flex-shrink:0}.security-hero{flex-wrap:wrap}.security-panel .empty-state{padding:30px 18px}.security-panel .empty-state p{max-width:520px}\n
+
+.security-hero .button{margin-left:auto;flex-shrink:0}.security-hero{flex-wrap:wrap}.security-panel .empty-state{padding:30px 18px}.security-panel .empty-state p{max-width:520px}
