@@ -69,3 +69,12 @@ Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il f
 Pour compiler sur Ubuntu, consulte [le guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
 
 **Important :** cette première version n'établit pas encore de session de contrôle distante et ne transfère pas les fichiers sur le réseau. L'association locale d'un appareil n'est pas une authentification serveur. Le relais inter-réseaux, le protocole chiffré et l'intégration avec le client desktop restent à implémenter avant tout usage réel. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
+
+
+## Agent Android (NEXUS Agent)
+
+Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il fournit un tableau de bord local, les informations de l'appareil, un sélecteur de fichiers, une demande de consentement système pour la capture d'écran, un inventaire des applications visibles et une liste locale d'appareils de confiance révocable.
+
+Pour compiler sur Ubuntu, consulte le [guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
+
+**Important :** cette première version n'établit pas encore de session de contrôle distante et ne transfère pas les fichiers sur le réseau. L'association locale d'un appareil n'est pas une authentification serveur. Le relais inter-réseaux, le protocole chiffré et l'intégration avec le client desktop restent à implémenter avant tout usage réel. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
