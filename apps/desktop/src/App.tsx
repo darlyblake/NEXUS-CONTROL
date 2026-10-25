@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 type Page = "overview" | "devices" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
-type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string };
+type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
 type AndroidDevice = { id: string; state: string; model: string };
@@ -51,6 +51,10 @@ function App() {
   const [tools, setTools] = useState<LocalTool[]>([]);
   const [android, setAndroid] = useState<AndroidDevice[]>([]);
   const [networkDevices, setNetworkDevices] = useState<NetworkDevice[]>([]);
+  const [networkTypeFilter, setNetworkTypeFilter] = useState("all");
+  const [networkConnectionFilter, setNetworkConnectionFilter] = useState("all");
+  const [networkSearch, setNetworkSearch] = useState("");
+  const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
   const [networkScanning, setNetworkScanning] = useState(false);
   const [connectingIp, setConnectingIp] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -390,20 +394,40 @@ function App() {
             <div className="network-summary">
               <div><span className="network-summary-label">Appareils détectés</span><strong>{networkDevices.length}</strong></div>
               <div><span className="network-summary-label">Méthodes</span><strong>Nmap · ARP · Ping</strong></div>
-              <div><span className="network-summary-label">Connexion</span><strong>Après autorisation de l'appareil</strong></div>
+              <div><span className="network-summary-label">Identification</span><strong>Indices vérifiés uniquement</strong></div>
             </div>
             <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Résultats du scan</h3><p>Adresse IP, nom réseau et adresse MAC lorsqu'ils sont disponibles.</p></div><span className="count-pill">{networkDevices.length} appareil(s)</span></div>
-              {networkScanning && networkDevices.length === 0 ? <div className="network-empty"><Radar size={27} className="spin"/><strong>Recherche des appareils sur le réseau…</strong><span>Cette opération peut prendre quelques secondes.</span></div> :
-              networkDevices.length === 0 ? <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil trouvé pour le moment" description="Vérifie que le Wi-Fi est connecté et que les appareils sont sur le même réseau. Installe Nmap pour améliorer la découverte (Ubuntu : sudo apt install nmap). arp-scan peut compléter les résultats avec sudo apt install arp-scan, mais nécessite parfois des permissions supplémentaires. Certains appareils restent invisibles." action="Réessayer" onAction={() => void scanNetwork()}/> :
-              <div className="network-device-grid">{networkDevices.map((device) => <article className="network-device-card" key={device.ip}>
-                <div className="network-device-top"><div className="network-device-icon">{device.kind.toLowerCase().includes("android") || device.hostname.toLowerCase().includes("tecno") ? <Smartphone size={20}/> : <MonitorSmartphone size={20}/>}</div><span className="state-pill state-ready"><span className="status-dot"/>En ligne</span></div>
-                <h3>{device.hostname || "Appareil sans nom"}</h3><p className="network-device-kind">{device.kind}</p>
-                <div className="network-info-row"><span>Adresse IP</span><strong className="mono">{device.ip}</strong></div>
-                <div className="network-info-row"><span>Adresse MAC</span><strong className="mono">{device.mac || "Non disponible"}</strong></div>
-                <div className="network-info-row"><span>Nom réseau</span><strong>{device.hostname || "Non communiqué"}</strong></div>
-                <button className="button button-secondary full-button" disabled={!!connectingIp || !tools.some(t => t.id === "adb" && t.installed)} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>
-              </article>)}</div>}
+              <div className="panel-header"><div><h3>Résultats du scan</h3><p>Les noms, fabricants et modèles sont séparés des hypothèses de type.</p></div><span className="count-pill">{networkDevices.length} appareil(s)</span></div>
+              <div className="network-filters">
+                <label>Type d'appareil<select value={networkTypeFilter} onChange={e => setNetworkTypeFilter(e.target.value)}><option value="all">Tous les appareils</option><option value="phone">Téléphones / tablettes</option><option value="computer">Ordinateurs</option><option value="tv">Téléviseurs / boîtiers</option><option value="network">Routeurs / équipements réseau</option><option value="unknown">Non identifié</option></select></label>
+                <label>Connexion<select value={networkConnectionFilter} onChange={e => setNetworkConnectionFilter(e.target.value)}><option value="all">Toutes les connexions</option><option value="network">Wi-Fi / Ethernet</option></select></label>
+                <label className="network-search">Rechercher<input value={networkSearch} onChange={e => setNetworkSearch(e.target.value)} placeholder="Nom, fabricant, IP ou MAC…"/></label>
+              </div>
+              {(() => {
+                const filtered = networkDevices.filter(device => {
+                  const type = device.deviceType || "unknown";
+                  const search = networkSearch.trim().toLowerCase();
+                  return (networkTypeFilter === "all" || type === networkTypeFilter)
+                    && (networkConnectionFilter === "all" || networkConnectionFilter === "network")
+                    && (!search || [device.hostname, device.manufacturer, device.model, device.ip, device.mac, device.kind].some(value => value.toLowerCase().includes(search)));
+                });
+                if (networkScanning && networkDevices.length === 0) return <div className="network-empty"><Radar size={27} className="spin"/><strong>Recherche des appareils sur le réseau…</strong><span>Cette opération peut prendre quelques secondes.</span></div>;
+                if (!filtered.length) return <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil correspondant" description={networkDevices.length ? "Modifie les filtres ou le texte de recherche." : "Vérifie que les appareils sont sur le même réseau. Certains appareils restent invisibles aux méthodes de découverte."} action="Réessayer l'analyse" onAction={() => void scanNetwork()}/>;
+                return <div className="network-device-grid">{filtered.map((device) => <article className="network-device-card" key={device.ip}>
+                  <div className="network-device-top"><div className="network-device-icon">{device.deviceType === "phone" ? <Smartphone size={20}/> : device.deviceType === "tv" ? <Tv size={20}/> : device.deviceType === "computer" ? <Monitor size={20}/> : <MonitorSmartphone size={20}/>}</div><span className="state-pill state-ready"><span className="status-dot"/>En ligne</span></div>
+                  <h3>{device.hostname || (device.manufacturer !== "Non identifié" ? device.manufacturer + " — appareil" : "Appareil non identifié")}</h3><p className="network-device-kind">{device.kind}</p>
+                  <div className="network-info-row"><span>Type</span><strong>{device.deviceType === "phone" ? "Téléphone / tablette probable" : device.deviceType === "computer" ? "Ordinateur probable" : device.deviceType === "tv" ? "Téléviseur / boîtier probable" : device.deviceType === "network" ? "Équipement réseau probable" : "Non identifié"}</strong></div>
+                  <div className="network-info-row"><span>Fabricant</span><strong>{device.manufacturer || "Non identifié"}</strong></div>
+                  <div className="network-info-row"><span>Modèle</span><strong>{device.model || "Inconnu — non communiqué par le réseau"}</strong></div>
+                  <div className="network-info-row"><span>Adresse IP</span><strong className="mono">{device.ip}</strong></div>
+                  <div className="network-info-row"><span>Adresse MAC</span><strong className="mono">{device.mac || "Non disponible"}</strong></div>
+                  <div className="network-info-row"><span>Système</span><strong>{device.osGuess || "Non déterminé"}</strong></div>
+                  <div className="network-info-row"><span>Connexion</span><strong>{device.connection || "Réseau local"}</strong></div>
+                  <button className="button button-secondary full-button" onClick={() => setExpandedDevice(expandedDevice === device.ip ? null : device.ip)}><CircleHelp size={14}/>{expandedDevice === device.ip ? "Masquer les indices" : "Voir les détails et les indices"}</button>
+                  {expandedDevice === device.ip && <div className="network-evidence"><strong>Indices utilisés</strong><ul>{(device.evidence?.length ? device.evidence : ["Aucun indice complémentaire disponible"]).map((item, index) => <li key={index}>{item}</li>)}</ul><p>Le type est une estimation. Le modèle exact reste inconnu tant qu'une source fiable ne le fournit pas.</p></div>}
+                  <button className="button button-primary full-button" disabled={!!connectingIp || !tools.some(t => t.id === "adb" && t.installed) || !/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(device.ip)} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>
+                </article>)}</div>;
+              })()}
             </div>
             <div className="info-banner"><CircleHelp size={17}/><div><strong>À savoir sur Android</strong><p>Le scan est automatique, mais Android n'autorise pas le contrôle à distance simplement parce qu'il est sur le même Wi-Fi. La connexion se fera si le débogage sans fil est actif et si ADB a déjà été autorisé/appairé. Si ce n'est pas le cas, l'application expliquera ce qui manque au lieu de contourner la sécurité du téléphone.</p></div></div>
           </section>}
