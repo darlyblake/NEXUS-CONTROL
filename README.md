@@ -8,12 +8,14 @@ Application de bureau open source pour administrer les appareils personnels depu
 - Tableau de bord et navigation en français.
 - Détection locale des outils ADB, scrcpy, Node.js, MeshCentral CLI et WireGuard.
 - Découverte des appareils Android via `adb devices -l`.
+- Page **Analyse réseau** : découverte d'hôtes du sous-réseau local avec Nmap (`-sn`), arp-scan si disponible, puis ping en secours ; aucun scan de ports n'est lancé par défaut.
+- Page **Sécurité** : bouton d'audit local en lecture seule qui vérifie la présence de Nmap, arp-scan, Netdiscover, TShark, WireGuard et l'état d'UFW sous Linux.
 - Lancement de scrcpy depuis la fiche d'un appareil, après validation qu'il est toujours connecté et autorisé.
 - Scripts d’installation MeshCentral distincts pour Windows et Linux, lancés dans un terminal visible depuis la carte d’intégration (Node.js 20+ requis).
 - Page **Accès distant** : configuration locale d’une URL HTTPS MeshCentral et ouverture sécurisée de la console dans le navigateur.
-- Pages de préparation des intégrations, sécurité, journal et paramètres.
+- Boutons graphiques pour ouvrir l'analyse Nmap/arp-scan, vérifier les outils de diagnostic et ouvrir la console distante HTTPS.
 
-La page Accès distant est une première étape : elle ouvre une console MeshCentral déjà déployée, mais ne crée pas encore les invitations ni ne gère les sessions directement. Le serveur public, les agents distants, l’authentification et les permissions doivent être configurés et testés. Le contrôle Android via Internet, les scripts, les automatisations, Android TV, Home Assistant et la gestion Apple restent à intégrer.
+La page Sécurité fournit un audit local de présence des outils, pas un audit de vulnérabilités. La page Analyse réseau fait une découverte d'hôtes sur le réseau local, pas un scan de ports. La page Accès distant est une première étape : elle ouvre une console MeshCentral déjà déployée, mais ne crée pas encore les invitations ni ne gère les sessions directement. Le serveur public, les agents distants, l’authentification et les permissions doivent être configurés et testés. Le contrôle Android via Internet, les scripts, les automatisations, Android TV, Home Assistant et la gestion Apple restent à intégrer.
 
 ## Architecture
 
