@@ -97,6 +97,13 @@ struct NetworkDevice {
     hostname: String,
     mac: String,
     kind: String,
+    manufacturer: String,
+    model: String,
+    device_type: String,
+    os_guess: String,
+    evidence: Vec<String>,
+    connection: String,
+    adb_status: String,
 }
 
 fn local_ipv4() -> Result<String, String> {
@@ -206,6 +213,26 @@ fn network_hostname(ip: &str) -> String {
     String::new()
 }
 
+// Recherche du fabricant dans la base OUI locale de Nmap ; aucune marque n'est devinée.
+fn network_vendor(mac: &str) -> String {
+    let prefix = mac.to_uppercase().replace('-', ":").split(':').take(3).collect::<Vec<_>>().join(":").replace(":", "");
+    if prefix.len() != 6 { return "Non identifié".to_string(); }
+    for path in ["/usr/share/nmap/nmap-mac-prefixes", "/usr/local/share/nmap/nmap-mac-prefixes"] {
+        if let Ok(content) = fs::read_to_string(path) {
+            for line in content.lines() {
+                let mut parts = line.split_whitespace();
+                if let Some(oui) = parts.next() {
+                    if oui.eq_ignore_ascii_case(&prefix) {
+                        let vendor = parts.collect::<Vec<_>>().join(" ");
+                        if !vendor.is_empty() { return vendor; }
+                    }
+                }
+            }
+        }
+    }
+    "Non identifié".to_string()
+}
+
 #[tauri::command]
 fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
     let local_ip = local_ipv4()?;
@@ -263,16 +290,43 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
     Ok(ips.into_iter().map(|ip| {
         let mac = network_mac(&ip);
         let hostname = network_hostname(&ip);
-        let kind = if hostname.to_lowercase().contains("android") || hostname.to_lowercase().contains("tecno") {
-            "Android probable".to_string()
-        } else if hostname.to_lowercase().contains("tv") || hostname.to_lowercase().contains("box") {
-            "Téléviseur / boîtier probable".to_string()
-        } else if hostname.is_empty() {
-            "Appareil réseau".to_string()
+        let manufacturer = network_vendor(&mac);
+        let lower = format!("{} {}", hostname.to_lowercase(), manufacturer.to_lowercase());
+        let mut evidence = Vec::new();
+        if !hostname.is_empty() { evidence.push(format!("Nom d'hôte résolu localement : {}", hostname)); }
+        if !mac.is_empty() { evidence.push(format!("Adresse MAC présente dans la table des voisins : {}", mac)); }
+        if manufacturer != "Non identifié" { evidence.push(format!("Fabricant associé au préfixe MAC dans la base locale Nmap : {}", manufacturer)); }
+        evidence.push("Hôte détecté par découverte réseau ; aucun scan de ports n'a été lancé".to_string());
+        let device_type = if ["android", "iphone", "ipad", "phone", "mobile", "tecno", "infinix", "itel", "samsung", "pixel", "redmi", "xiaomi", "oppo", "vivo", "huawei"].iter().any(|v| lower.contains(v)) {
+            "phone"
+        } else if ["smart-tv", "smarttv", "television", "android-tv", "roku", "chromecast", "firetv", "tv-", "box"].iter().any(|v| lower.contains(v)) {
+            "tv"
+        } else if ["router", "gateway", "access-point", "access point", "ubiquiti", "mikrotik", "tp-link", "tplink", "cisco", "netgear"].iter().any(|v| lower.contains(v)) {
+            "network"
+        } else if !hostname.is_empty() {
+            "computer"
         } else {
-            "Ordinateur / appareil réseau".to_string()
+            "unknown"
         };
-        NetworkDevice { ip, hostname, mac, kind }
+        let kind = match device_type {
+            "phone" => "Téléphone / tablette probable",
+            "tv" => "Téléviseur / boîtier probable",
+            "network" => "Équipement réseau probable",
+            "computer" => "Ordinateur probable (nom d'hôte disponible)",
+            _ => "Type non identifié",
+        }.to_string();
+        let os_guess = if device_type == "phone" && lower.contains("android") { "Android probable" }
+            else if device_type == "computer" && lower.contains("windows") { "Windows probable" }
+            else { "Non déterminé par la découverte sans ports" }.to_string();
+        NetworkDevice {
+            ip, hostname, mac, kind, manufacturer,
+            model: "Inconnu — non communiqué par la découverte réseau".to_string(),
+            device_type: device_type.to_string(),
+            os_guess,
+            evidence,
+            connection: "Wi-Fi / Ethernet".to_string(),
+            adb_status: "Non testé".to_string(),
+        }
     }).collect())
 }
 
