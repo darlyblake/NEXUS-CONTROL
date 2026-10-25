@@ -90,6 +90,187 @@ fn read_android_devices() -> Result<Vec<AndroidDevice>, String> {
     Ok(devices)
 }
 
+
+#[derive(Serialize)]
+struct NetworkDevice {
+    ip: String,
+    hostname: String,
+    mac: String,
+    kind: String,
+}
+
+fn local_ipv4() -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("ip").args(["-o", "-f", "inet", "addr", "show", "scope", "global"])
+            .output().map_err(|error| format!("Impossible de lire les interfaces réseau : {error}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(index) = parts.iter().position(|part| *part == "inet") {
+                if let Some(cidr) = parts.get(index + 1) {
+                    let ip = cidr.split('/').next().unwrap_or("");
+                    if ip.parse::<std::net::Ipv4Addr>().is_ok() && !ip.starts_with("127.") && !ip.starts_with("169.254.") {
+                        return Ok(ip.to_string());
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("ipconfig").output()
+            .map_err(|error| format!("Impossible de lire les interfaces réseau : {error}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if line.to_lowercase().contains("ipv4") {
+                if let Some(value) = line.split(':').last() {
+                    let ip = value.trim().trim_start_matches("Preferred").trim();
+                    if ip.parse::<std::net::Ipv4Addr>().is_ok() && !ip.starts_with("127.") && !ip.starts_with("169.254.") {
+                        return Ok(ip.to_string());
+                    }
+                }
+            }
+        }
+    }
+    Err("Aucune adresse IPv4 locale détectée. Connecte cet ordinateur au Wi-Fi ou au réseau Ethernet, puis réessaie.".to_string())
+}
+
+fn ping_host(ip: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    let result = Command::new("ping").args(["-n", "1", "-w", "300", ip]).output();
+    #[cfg(not(target_os = "windows"))]
+    let result = Command::new("ping").args(["-c", "1", "-W", "1", ip]).output();
+    result.map(|output| output.status.success()).unwrap_or(false)
+}
+
+fn network_mac(ip: &str) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = Command::new("ip").args(["neigh", "show", ip]).output() {
+            let line = String::from_utf8_lossy(&output.stdout);
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(index) = parts.iter().position(|part| *part == "lladdr") {
+                if let Some(mac) = parts.get(index + 1) { return mac.to_string(); }
+            }
+        }
+    }
+    let output = Command::new("arp").arg("-a").output();
+    if let Ok(output) = output {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            if line.contains(ip) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if let Some(mac) = parts.iter().find(|part| part.matches(':').count() == 5 || part.matches('-').count() == 5) {
+                    return mac.to_string();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn network_hostname(ip: &str) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = Command::new("getent").args(["hosts", ip]).output() {
+            let line = String::from_utf8_lossy(&output.stdout);
+            if let Some(name) = line.split_whitespace().nth(1) { return name.to_string(); }
+        }
+    }
+    String::new()
+}
+
+#[tauri::command]
+fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
+    let local_ip = local_ipv4()?;
+    let octets: Vec<&str> = local_ip.split('.').collect();
+    if octets.len() != 4 {
+        return Err("Adresse IPv4 locale invalide.".to_string());
+    }
+    // Scan volontairement limité au /24 local, sans balayage d'autres réseaux.
+    let prefix = format!("{}.{}.{}", octets[0], octets[1], octets[2]);
+    let targets: Vec<String> = (1..=254)
+        .map(|last| format!("{prefix}.{last}"))
+        .filter(|ip| ip != &local_ip)
+        .collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let alive = std::sync::Mutex::new(Vec::<String>::new());
+
+    std::thread::scope(|scope| {
+        for _ in 0..24 {
+            let targets = &targets;
+            let next = &next;
+            let alive = &alive;
+            scope.spawn(move || loop {
+                let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if index >= targets.len() { break; }
+                let ip = &targets[index];
+                if ping_host(ip) {
+                    if let Ok(mut found) = alive.lock() { found.push(ip.clone()); }
+                }
+            });
+        }
+    });
+
+    let mut ips = alive.into_inner().unwrap_or_default();
+    ips.sort();
+    ips.dedup();
+    Ok(ips.into_iter().map(|ip| {
+        let mac = network_mac(&ip);
+        let hostname = network_hostname(&ip);
+        let kind = if hostname.to_lowercase().contains("android") || hostname.to_lowercase().contains("tecno") {
+            "Android probable".to_string()
+        } else if hostname.to_lowercase().contains("tv") || hostname.to_lowercase().contains("box") {
+            "Téléviseur / boîtier probable".to_string()
+        } else if hostname.is_empty() {
+            "Appareil réseau".to_string()
+        } else {
+            "Ordinateur / appareil réseau".to_string()
+        };
+        NetworkDevice { ip, hostname, mac, kind }
+    }).collect())
+}
+
+#[tauri::command]
+fn connect_network_android(ip: String) -> Result<String, String> {
+    let parsed: std::net::Ipv4Addr = ip.parse().map_err(|_| "Adresse IPv4 invalide.".to_string())?;
+    if !parsed.is_private() {
+        return Err("Pour des raisons de sécurité, NEXUS CONTROL ne tente une connexion que vers une adresse IPv4 privée du réseau local.".to_string());
+    }
+    if !command_exists("adb") {
+        return Err("ADB n'est pas installé. Installe Android platform-tools avant de connecter un téléphone.".to_string());
+    }
+
+    // ADB mDNS fournit le port dynamique du débogage sans fil lorsqu'il est publié.
+    let mut endpoint = format!("{ip}:5555");
+    if let Ok(output) = Command::new("adb").args(["mdns", "services"]).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if line.contains("_adb-tls-connect._tcp") && line.contains(&ip) {
+                if let Some(candidate) = line.split_whitespace().last() {
+                    if candidate.starts_with(&format!("{ip}:")) { endpoint = candidate.to_string(); break; }
+                }
+            }
+        }
+    }
+
+    let output = Command::new("adb").arg("connect").arg(&endpoint).output()
+        .map_err(|error| format!("Impossible de lancer ADB : {error}"))?;
+    let response = format!("{} {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    let devices = read_android_devices()?;
+    if !devices.iter().any(|device| device.id == endpoint && device.state == "device") {
+        return Err(format!("Connexion non autorisée ou indisponible sur {endpoint}. Vérifie que le débogage sans fil est activé sur le téléphone et que cet ordinateur est déjà autorisé/appairé. Réponse ADB : {}", response.trim()));
+    }
+
+    if command_exists("scrcpy") {
+        Command::new("scrcpy").arg("--serial").arg(&endpoint).spawn()
+            .map_err(|error| format!("ADB est connecté, mais scrcpy n'a pas pu démarrer : {error}"))?;
+        Ok(format!("Téléphone connecté sur {endpoint}. scrcpy a été lancé."))
+    } else {
+        Ok(format!("Téléphone connecté sur {endpoint}, mais scrcpy n'est pas installé : l'écran ne peut pas encore être affiché."))
+    }
+}
+
 #[tauri::command]
 fn get_local_tools() -> Vec<LocalTool> {
     let checks = [
@@ -225,6 +406,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_local_tools,
             scan_android_devices,
+            scan_network_devices,
+            connect_network_android,
             launch_scrcpy,
             install_integration
         ])
