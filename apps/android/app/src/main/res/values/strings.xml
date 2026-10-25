@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">NEXUS Agent</string>
+    <string name="accessibility_description">Permet le contrôle à distance uniquement lorsque le propriétaire active explicitement le service et autorise une session de confiance.</string>
+</resources>
