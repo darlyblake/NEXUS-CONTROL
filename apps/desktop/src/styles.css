@@ -31,3 +31,16 @@
 @media(max-width:700px){.remote-actions{flex-wrap:wrap}.remote-server-input{width:calc(100% - 30px)}}
 
 .security-hero .button{margin-left:auto;flex-shrink:0}.security-hero{flex-wrap:wrap}.security-panel .empty-state{padding:30px 18px}.security-panel .empty-state p{max-width:520px}
+
+
+/* Filtres et détails de l'analyse réseau */
+.network-filters{display:grid;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) minmax(220px,1.4fr);gap:12px;padding:15px 18px;border-bottom:1px solid #edf0f5;background:#fbfcfe}
+.network-filters label{display:flex;flex-direction:column;gap:6px;font-size:10px;font-weight:600;color:#52627a;min-width:0}
+.network-filters select,.network-filters input{width:100%;height:36px;border:1px solid #dfe6f0;border-radius:7px;background:#fff;padding:0 10px;color:#344054;outline:none;min-width:0}
+.network-filters select:focus,.network-filters input:focus{border-color:#7b9be9;box-shadow:0 0 0 3px #3569e815}
+.network-evidence{margin-top:11px;padding:11px;border:1px solid #e3eaf5;border-radius:8px;background:#f8faff;font-size:10px;color:#52627a;line-height:1.6}
+.network-evidence strong{color:#33445e}
+.network-evidence ul{padding-left:18px;margin:7px 0}
+.network-evidence p{margin:7px 0 0;color:#7b8799}
+.network-device-card .full-button{margin-top:8px}
+@media(max-width:1050px){.network-filters{grid-template-columns:1fr}.network-device-grid{grid-template-columns:1fr}}
