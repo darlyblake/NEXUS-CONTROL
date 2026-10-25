@@ -40,7 +40,18 @@ Pour vérifier le frontend :
 npm run build
 ```
 
-## 5. Préparer Android
+## 5. Construire l'application de bureau
+
+Depuis `apps/desktop`, installe les dépendances Node.js, puis lance :
+
+```bash
+npm install
+npm run tauri:build
+```
+
+Les paquets générés sont dans `apps/desktop/src-tauri/target/release/bundle/`. Pour construire la version Windows, utilise un ordinateur Windows ou le workflow GitHub Actions **Build desktop** ; un paquet Windows natif ne se construit pas comme une cible Linux ordinaire.
+
+## 6. Préparer Android
 
 ```bash
 sudo apt install -y adb scrcpy
@@ -55,7 +66,7 @@ La page « Mes appareils » affiche les appareils réellement détectés par ADB
 
 Si la version de scrcpy fournie par Ubuntu est ancienne, consulte le dépôt officiel : https://github.com/Genymobile/scrcpy
 
-## 6. MeshCentral
+## 7. MeshCentral
 
 Dans l'application de bureau, ouvre **Intégrations → MeshCentral → Installer / configurer**. NEXUS CONTROL détecte Windows ou Linux et ouvre le script correspondant dans un terminal visible.
 
@@ -67,6 +78,6 @@ Guide officiel : https://docs.meshcentral.com/install/quickstart/
 
 **Sécurité :** ce premier flux installe et démarre le serveur, mais n'installe pas encore les agents sur les autres appareils et ne connecte pas automatiquement ces appareils à NEXUS CONTROL. Ne l'expose pas sur Internet. Vérifie les comptes, TLS et le pare-feu avant tout usage sur un réseau partagé.
 
-## 7. État des fonctions
+## 8. État des fonctions
 
 La première version comprend l'interface de bureau, la détection d'outils locaux, la découverte ADB et un flux d'installation/démarrage local de MeshCentral sur Windows et Linux. Le contrôle des bureaux distants via MeshCentral, le transfert de fichiers, l'installation des agents, les scripts et les automatisations restent à intégrer et tester.
