@@ -54,7 +54,7 @@ if [ ! -f config.json ]; then
   "domains": {
     "": {
       "title": "NEXUS CONTROL - MeshCentral local",
-      "newAccounts": true,
+      "newAccounts": false,
       "localSessionRecording": false
     }
   }
