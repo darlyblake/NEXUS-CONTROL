@@ -10,9 +10,10 @@ Application de bureau open source pour administrer les appareils personnels depu
 - Découverte des appareils Android via `adb devices -l`.
 - Lancement de scrcpy depuis la fiche d'un appareil, après validation qu'il est toujours connecté et autorisé.
 - Scripts d’installation MeshCentral distincts pour Windows et Linux, lancés dans un terminal visible depuis la carte d’intégration (Node.js 20+ requis).
+- Page **Accès distant** : configuration locale d’une URL HTTPS MeshCentral et ouverture sécurisée de la console dans le navigateur.
 - Pages de préparation des intégrations, sécurité, journal et paramètres.
 
-Les fonctions de bureau distant MeshCentral, transfert de fichiers, scripts, automatisations, Android TV, Home Assistant et gestion Apple restent à intégrer. L'interface indique leur état sans prétendre qu'elles sont déjà opérationnelles.
+La page Accès distant est une première étape : elle ouvre une console MeshCentral déjà déployée, mais ne crée pas encore les invitations ni ne gère les sessions directement. Le serveur public, les agents distants, l’authentification et les permissions doivent être configurés et testés. Le contrôle Android via Internet, les scripts, les automatisations, Android TV, Home Assistant et la gestion Apple restent à intégrer.
 
 ## Architecture
 
@@ -36,7 +37,7 @@ Le premier build doit encore être validé dans GitHub Actions avant de considé
 
 ## Installation
 
-Voir [Installation Ubuntu](docs/installation-ubuntu.md).
+Voir [Installation Ubuntu](docs/installation-ubuntu.md) et le [guide d’accès distant par Internet](docs/remote-access-link.md).
 
 Depuis le dossier de l'application :
 
