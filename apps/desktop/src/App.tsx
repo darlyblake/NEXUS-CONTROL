@@ -114,6 +114,38 @@ function App() {
     }
   }, [refreshLocal]);
 
+  const recoverBrokenScreen = useCallback(async () => {
+    if (!isDesktopRuntime()) {
+      setNotice("La récupération nécessite l'application de bureau NEXUS CONTROL.");
+      return;
+    }
+    setChecking(true);
+    setNotice("Diagnostic de récupération Android en cours…");
+    try {
+      const devices = await invoke<AndroidDevice[]>("scan_android_devices");
+      setAndroid(devices);
+      const ready = devices.find((device) => device.state === "device");
+      if (ready && tools.some((tool) => tool.id === "scrcpy" && tool.installed)) {
+        await invoke("launch_scrcpy", { serial: ready.id });
+        setNotice("Un appareil déjà autorisé (" + ready.model + " — " + ready.id + ") est disponible : scrcpy a été lancé. Si l'écran est cassé, tu peux tenter de le contrôler depuis l'ordinateur.");
+        return;
+      }
+      if (devices.some((device) => device.state === "unauthorized")) {
+        setNotice("Téléphone détecté, mais ADB indique « unauthorized ». NEXUS CONTROL ne peut pas supprimer cette autorisation. Pour ton téléphone : essaie une souris USB OTG ou un écran externe compatible pour confirmer la demande RSA ; sinon utilise un ordinateur déjà autorisé ou la récupération officielle du fabricant. Après autorisation, relance le diagnostic.");
+        return;
+      }
+      if (devices.some((device) => device.state === "offline")) {
+        setNotice("Le téléphone est détecté mais ADB le signale hors ligne. Essaie un câble USB de données, un autre port, puis débranche/rebranche le téléphone. Si l'autorisation RSA apparaît, confirme-la sur l'appareil. Aucun contournement d'autorisation n'est possible depuis le scanner réseau.");
+        return;
+      }
+      setNotice("Aucun appareil Android déjà autorisé n'est prêt. Branche le téléphone avec un câble USB de données. Si l'écran est inutilisable, essaie une souris USB OTG ou un écran externe compatible pour déverrouiller le téléphone et autoriser le débogage. Si le débogage USB n'avait jamais été activé et cet ordinateur jamais autorisé, Nmap/arp-scan ne peuvent pas remplacer cette étape.");
+    } catch (error) {
+      setNotice("Diagnostic impossible : " + String(error));
+    } finally {
+      setChecking(false);
+    }
+  }, [tools]);
+
   const installIntegration = useCallback(async (integrationId: string) => {
     if (!isDesktopRuntime()) {
       setNotice("L'installation automatique nécessite l'application de bureau NEXUS CONTROL, pas l'aperçu navigateur.");
@@ -245,7 +277,7 @@ function App() {
           </section>}
 
           {page === "devices" && <section className="page-body">
-            <div className="filter-bar"><div className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un appareil Android…" /></div><button className="button button-secondary" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={15} className={checking ? "spin" : ""}/> Scanner via ADB</button></div>
+            <div className="filter-bar"><div className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un appareil Android…" /></div><div className="heading-actions"><button className="button button-secondary" onClick={() => void recoverBrokenScreen()} disabled={checking}><Smartphone size={15}/>{checking ? "Diagnostic…" : "Écran cassé ? Récupérer l'accès"}</button><button className="button button-secondary" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={15} className={checking ? "spin" : ""}/> Scanner via ADB</button></div></div>
             <div className="panel device-panel"><div className="panel-header"><div><h3>Appareils Android détectés</h3><p>Les appareils sont listés uniquement si ADB les retourne réellement.</p></div><span className="count-pill">{filteredAndroid.length} trouvé(s)</span></div>
               {filteredAndroid.length === 0 ? <EmptyState icon={<Smartphone size={24}/>} title="Aucun appareil Android détecté" description="Branche un téléphone avec un câble USB de données, active le débogage USB et autorise cet ordinateur. Puis lance un nouveau scan." action="Voir les instructions" onAction={() => { setNotice("Dans un terminal : adb devices. Si le téléphone affiche unauthorized, confirme l'autorisation RSA sur l'écran du téléphone."); }}/> :
               <div className="table-wrap"><table><thead><tr><th>APPAREIL</th><th>IDENTIFIANT</th><th>ÉTAT ADB</th><th>CONTRÔLE</th></tr></thead><tbody>{filteredAndroid.map((device) => <tr key={device.id}><td><div className="device-cell"><div className="device-icon"><Smartphone size={18}/></div><div><strong>{device.model || "Appareil Android"}</strong><span>Android / ADB</span></div></div></td><td className="mono">{device.id}</td><td><span className={`state-pill ${device.state === "device" ? "state-ready" : "state-warn"}`}><span className="status-dot"/>{device.state}</span></td><td><button className="button button-secondary button-small" disabled={!runtime || device.state !== "device" || !tools.some(t => t.id === "scrcpy" && t.installed)} onClick={() => void invoke("launch_scrcpy", { serial: device.id }).then(() => setNotice("scrcpy a été lancé pour " + device.id + ".")).catch((error) => setNotice("Impossible de lancer scrcpy : " + String(error)))}>Écran distant</button></td></tr>)}</tbody></table></div>}
