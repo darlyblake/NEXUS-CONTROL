@@ -1,0 +1,38 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials/
+
+# Node
+node_modules/
+dist/
+.vite/
+.npm/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Python
+__pycache__/
+.venv/
+*.py[cod]
+
+# Logs and local state
+*.log
+logs/
+data/
+*.db
+*.sqlite
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
