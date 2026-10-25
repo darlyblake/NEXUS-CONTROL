@@ -92,6 +92,7 @@ fn read_android_devices() -> Result<Vec<AndroidDevice>, String> {
 
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NetworkDevice {
     ip: String,
     hostname: String,
