@@ -195,31 +195,6 @@ fn network_scan_with_arp_scan() -> Vec<String> {
     }).collect()
 }
 
-fn network_neighbor_ips() -> Vec<String> {
-    let mut ips = Vec::new();
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(output) = Command::new("ip").args(["neigh", "show"]).output() {
-            for line in String::from_utf8_lossy(&output.stdout).lines() {
-                if let Some(ip) = line.split_whitespace().next() {
-                    if ip.parse::<std::net::Ipv4Addr>().is_ok() { ips.push(ip.to_string()); }
-                }
-            }
-        }
-    }
-    if let Ok(output) = Command::new("arp").arg("-a").output() {
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            for part in line.split_whitespace() {
-                let candidate = part.trim_matches(|c| c == '(' || c == ')' || c == '[' || c == ']');
-                if candidate.parse::<std::net::Ipv4Addr>().is_ok() { ips.push(candidate.to_string()); }
-            }
-        }
-    }
-    ips.sort();
-    ips.dedup();
-    ips
-}
-
 fn network_hostname(ip: &str) -> String {
     #[cfg(target_os = "linux")]
     {
@@ -271,8 +246,18 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
         });
         ips.extend(alive.into_inner().unwrap_or_default());
     }
-    // La table des voisins peut révéler certains appareils qui bloquent les sondes ping.
-    ips.extend(network_neighbor_ips().into_iter().filter(|ip| ip.starts_with(&format!("{prefix}."))));
+    // Ne garder que les hôtes de la plage Wi-Fi scannée. arp-scan peut examiner
+    // d'autres interfaces (Docker, machines virtuelles, VPN) ; leurs résultats sont exclus.
+    // On ne fusionne pas toute la table ARP/voisins, car elle peut contenir des entrées anciennes.
+    ips.retain(|ip| {
+        if ip == &local_ip || !ip.starts_with(&format!("{prefix}.")) {
+            return false;
+        }
+        let Some(last_octet) = ip.rsplit('.').next().and_then(|value| value.parse::<u8>().ok()) else {
+            return false;
+        };
+        last_octet != 0 && last_octet != 255
+    });
     ips.sort();
     ips.dedup();
     Ok(ips.into_iter().map(|ip| {
