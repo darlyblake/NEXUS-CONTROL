@@ -649,9 +649,13 @@ fn audit_tool(id: &str, label: &str, args: &[&str]) -> AuditCheck {
 
     let version = Command::new(id).args(args).output().ok()
         .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8_lossy(&output.stdout).lines()
-            .chain(String::from_utf8_lossy(&output.stderr).lines())
-            .find(|line| !line.trim().is_empty()).map(|line| line.trim().to_string()));
+        .and_then(|output| {
+            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+            stdout.lines().chain(stderr.lines())
+                .find(|line| !line.trim().is_empty())
+                .map(|line| line.trim().to_string())
+        });
 
     AuditCheck {
         id: id.to_string(),
