@@ -169,6 +169,32 @@ fn network_mac(ip: &str) -> String {
     String::new()
 }
 
+
+fn network_neighbor_ips() -> Vec<String> {
+    let mut ips = Vec::new();
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = Command::new("ip").args(["neigh", "show"]).output() {
+            for line in String::from_utf8_lossy(&output.stdout).lines() {
+                if let Some(ip) = line.split_whitespace().next() {
+                    if ip.parse::<std::net::Ipv4Addr>().is_ok() { ips.push(ip.to_string()); }
+                }
+            }
+        }
+    }
+    if let Ok(output) = Command::new("arp").arg("-a").output() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            for part in line.split_whitespace() {
+                let candidate = part.trim_matches(|c| c == '(' || c == ')' || c == '[' || c == ']');
+                if candidate.parse::<std::net::Ipv4Addr>().is_ok() { ips.push(candidate.to_string()); }
+            }
+        }
+    }
+    ips.sort();
+    ips.dedup();
+    ips
+}
+
 fn network_hostname(ip: &str) -> String {
     #[cfg(target_os = "linux")]
     {
@@ -213,6 +239,8 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
     });
 
     let mut ips = alive.into_inner().unwrap_or_default();
+    // Ajoute aussi les voisins connus par ARP, y compris certains appareils qui bloquent le ping.
+    ips.extend(network_neighbor_ips().into_iter().filter(|ip| ip.starts_with(&format!("{prefix}."))));
     ips.sort();
     ips.dedup();
     Ok(ips.into_iter().map(|ip| {
