@@ -115,6 +115,10 @@ function App() {
       setNotice("La connexion Android nécessite l'application de bureau NEXUS CONTROL.");
       return;
     }
+    if (!tools.some(tool => tool.id === "adb" && tool.installed)) {
+      setNotice("Connexion non lancée : ADB n'est pas installé ou détecté. Installe Android platform-tools, puis clique sur « Actualiser les outils » avant de réessayer.");
+      return;
+    }
     setConnectingIp(ip);
     setNotice("Recherche d'un service ADB autorisé sur " + ip + "…");
     try {
@@ -126,7 +130,7 @@ function App() {
     } finally {
       setConnectingIp(null);
     }
-  }, [refreshLocal]);
+  }, [refreshLocal, tools]);
 
   const recoverBrokenScreen = useCallback(async () => {
     if (!isDesktopRuntime()) {
@@ -441,7 +445,7 @@ function App() {
                   <div className="network-info-row"><span>Connexion</span><strong>{device.connection || "Réseau local"}</strong></div>
                   <button className="button button-secondary full-button" onClick={() => setExpandedDevice(expandedDevice === device.ip ? null : device.ip)}><CircleHelp size={14}/>{expandedDevice === device.ip ? "Masquer les indices" : "Voir les détails et les indices"}</button>
                   {expandedDevice === device.ip && <div className="network-evidence"><strong>Indices utilisés</strong><ul>{(device.evidence?.length ? device.evidence : ["Aucun indice complémentaire disponible"]).map((item, index) => <li key={index}>{item}</li>)}</ul><p>Le type est une estimation. Le modèle exact reste inconnu tant qu'une source fiable ne le fournit pas.</p></div>}
-                  {!device.connection.includes("ADB") && <button className="button button-primary full-button" disabled={!!connectingIp || !tools.some(t => t.id === "adb" && t.installed) || device.ip === "—"} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>}
+                  {!device.connection.includes("ADB") && <button className="button button-primary full-button" disabled={!!connectingIp || device.ip === "—"} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>}
                 </article>)}</div>;
               })()}
             </div>
