@@ -170,6 +170,31 @@ fn network_mac(ip: &str) -> String {
 }
 
 
+
+fn network_scan_with_nmap(target: &str) -> Vec<String> {
+    if !command_exists("nmap") { return Vec::new(); }
+    let output = Command::new("nmap").args(["-sn", "-n", "--", target]).output();
+    let Ok(output) = output else { return Vec::new(); };
+    if !output.status.success() { return Vec::new(); }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.lines().filter_map(|line| {
+        let rest = line.strip_prefix("Nmap scan report for ")?;
+        let candidate = rest.split_whitespace().last().unwrap_or(rest).trim_matches(|c| c == '(' || c == ')');
+        candidate.parse::<std::net::Ipv4Addr>().ok().map(|_| candidate.to_string())
+    }).collect()
+}
+
+fn network_scan_with_arp_scan() -> Vec<String> {
+    if !command_exists("arp-scan") { return Vec::new(); }
+    let output = Command::new("arp-scan").args(["--localnet", "--plain"]).output();
+    let Ok(output) = output else { return Vec::new(); };
+    if !output.status.success() { return Vec::new(); }
+    String::from_utf8_lossy(&output.stdout).lines().filter_map(|line| {
+        let candidate = line.split_whitespace().next()?;
+        candidate.parse::<std::net::Ipv4Addr>().ok().map(|_| candidate.to_string())
+    }).collect()
+}
+
 fn network_neighbor_ips() -> Vec<String> {
     let mut ips = Vec::new();
     #[cfg(target_os = "linux")]
@@ -213,33 +238,40 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
     if octets.len() != 4 {
         return Err("Adresse IPv4 locale invalide.".to_string());
     }
-    // Scan volontairement limité au /24 local, sans balayage d'autres réseaux.
+    // Délimitation prudente au sous-réseau IPv4 /24 local actuel.
+    // Nmap (-sn) est préféré pour la découverte d'hôtes; arp-scan complète sur Linux si autorisé.
     let prefix = format!("{}.{}.{}", octets[0], octets[1], octets[2]);
-    let targets: Vec<String> = (1..=254)
-        .map(|last| format!("{prefix}.{last}"))
-        .filter(|ip| ip != &local_ip)
-        .collect();
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let alive = std::sync::Mutex::new(Vec::<String>::new());
+    let subnet = format!("{prefix}.0/24");
+    let mut ips = network_scan_with_nmap(&subnet);
+    ips.extend(network_scan_with_arp_scan());
 
-    std::thread::scope(|scope| {
-        for _ in 0..24 {
-            let targets = &targets;
-            let next = &next;
-            let alive = &alive;
-            scope.spawn(move || loop {
-                let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if index >= targets.len() { break; }
-                let ip = &targets[index];
-                if ping_host(ip) {
-                    if let Ok(mut found) = alive.lock() { found.push(ip.clone()); }
-                }
-            });
-        }
-    });
+    // Fallback simple si les outils Kali ne sont pas installés ou n'ont pas les permissions.
+    if ips.is_empty() {
+        let targets: Vec<String> = (1..=254)
+            .map(|last| format!("{prefix}.{last}"))
+            .filter(|ip| ip != &local_ip)
+            .collect();
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let alive = std::sync::Mutex::new(Vec::<String>::new());
 
-    let mut ips = alive.into_inner().unwrap_or_default();
-    // Ajoute aussi les voisins connus par ARP, y compris certains appareils qui bloquent le ping.
+        std::thread::scope(|scope| {
+            for _ in 0..24 {
+                let targets = &targets;
+                let next = &next;
+                let alive = &alive;
+                scope.spawn(move || loop {
+                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= targets.len() { break; }
+                    let ip = &targets[index];
+                    if ping_host(ip) {
+                        if let Ok(mut found) = alive.lock() { found.push(ip.clone()); }
+                    }
+                });
+            }
+        });
+        ips.extend(alive.into_inner().unwrap_or_default());
+    }
+    // La table des voisins peut révéler certains appareils qui bloquent les sondes ping.
     ips.extend(network_neighbor_ips().into_iter().filter(|ip| ip.starts_with(&format!("{prefix}."))));
     ips.sort();
     ips.dedup();
@@ -302,6 +334,9 @@ fn connect_network_android(ip: String) -> Result<String, String> {
 #[tauri::command]
 fn get_local_tools() -> Vec<LocalTool> {
     let checks = [
+        ("nmap", "Nmap", "Découverte des hôtes du réseau local (scan sans ports)"),
+        ("arp-scan", "arp-scan", "Découverte ARP et fabricants sur le réseau local"),
+        ("netdiscover", "Netdiscover", "Découverte ARP active/passive (outil Kali Linux)"),
         ("adb", "Android Debug Bridge", "Détection des appareils Android autorisés"),
         ("scrcpy", "scrcpy", "Affichage et contrôle d'écran Android"),
         ("node", "Node.js", "Runtime utilisé par certains outils intégrés"),
