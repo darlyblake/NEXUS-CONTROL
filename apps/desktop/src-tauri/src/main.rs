@@ -608,6 +608,25 @@ fn install_app_update() -> Result<String, String> {
     }
 }
 
+
+#[tauri::command]
+fn open_remote_console(url: String) -> Result<String, String> {
+    let parsed = url::Url::parse(url.trim())
+        .map_err(|_| "Adresse de serveur invalide.".to_string())?;
+    if parsed.scheme() != "https" || parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Pour protéger la session, indique une URL HTTPS valide sans identifiants intégrés dans l'adresse.".to_string());
+    }
+    let normalized = parsed.to_string();
+    #[cfg(target_os = "linux")]
+    let result = Command::new("xdg-open").arg(&normalized).spawn();
+    #[cfg(target_os = "windows")]
+    let result = Command::new("cmd").arg("/C").arg("start").arg("").arg(&normalized).spawn();
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(&normalized).spawn();
+    result.map(|_| "Console distante ouverte dans le navigateur par défaut. Connecte-toi et vérifie les autorisations sur le serveur.".to_string())
+        .map_err(|error| format!("Impossible d'ouvrir la console distante : {error}"))
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -618,7 +637,8 @@ fn main() {
             launch_scrcpy,
             install_integration,
             check_app_update,
-            install_app_update
+            install_app_update,
+            open_remote_console
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");
