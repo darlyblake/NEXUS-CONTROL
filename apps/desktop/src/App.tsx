@@ -44,6 +44,7 @@ function App() {
   const [tools, setTools] = useState<LocalTool[]>([]);
   const [android, setAndroid] = useState<AndroidDevice[]>([]);
   const [checking, setChecking] = useState(false);
+  const [installingIntegration, setInstallingIntegration] = useState<string | null>(null);
   const [runtime, setRuntime] = useState(isDesktopRuntime());
   const [notice, setNotice] = useState("Bienvenue dans NEXUS CONTROL. Les connecteurs ne sont pas encore configurés.");
   const [lastCheck, setLastCheck] = useState<string | null>(null);
@@ -68,6 +69,23 @@ function App() {
       setNotice("La vérification locale a échoué : " + String(error));
     } finally {
       setChecking(false);
+    }
+  }, []);
+
+  const installIntegration = useCallback(async (integrationId: string) => {
+    if (!isDesktopRuntime()) {
+      setNotice("L'installation automatique nécessite l'application de bureau NEXUS CONTROL, pas l'aperçu navigateur.");
+      return;
+    }
+    setInstallingIntegration(integrationId);
+    setNotice("Préparation du script d'installation pour ton système…");
+    try {
+      const message = await invoke<string>("install_integration", { integrationId });
+      setNotice(message);
+    } catch (error) {
+      setNotice("Impossible de démarrer l'installation : " + String(error));
+    } finally {
+      setInstallingIntegration(null);
     }
   }, []);
 
@@ -194,7 +212,7 @@ function App() {
 
           {page === "integrations" && <section className="page-body">
             <div className="integration-grid">
-              <ConnectorCard icon={<Monitor size={23}/>} title="MeshCentral" category="Ordinateurs Windows / Linux" description="Gestion du bureau, terminal et fichiers à distance via un serveur MeshCentral configuré." state={tools.find(t => t.id === "meshcentral")?.installed ? "Outil détecté" : "Non détecté"} tone={tools.find(t => t.id === "meshcentral")?.installed ? "good" : "neutral"} action={() => setNotice("Suis docs/installation-ubuntu.md pour préparer MeshCentral en local. L'intégration à l'interface viendra après validation du serveur.")}/>
+              <ConnectorCard icon={<Monitor size={23}/>} title="MeshCentral" category="Ordinateurs Windows / Linux" description="Installe le serveur local depuis un script adapté à Windows ou Linux, puis démarre sa console de configuration." state={tools.find(t => t.id === "meshcentral")?.installed ? "Installé localement" : "Installation requise"} tone={tools.find(t => t.id === "meshcentral")?.installed ? "good" : "neutral"} actionLabel={installingIntegration === "meshcentral" ? "Préparation…" : "Installer / configurer"} action={() => void installIntegration("meshcentral")}/>
               <ConnectorCard icon={<Smartphone size={23}/>} title="scrcpy + ADB" category="Android" description="Affichage et contrôle de l'écran via USB ou réseau local autorisé. Le débogage USB doit être approuvé sur le téléphone." state={tools.some(t => t.id === "adb" && t.installed) && tools.some(t => t.id === "scrcpy" && t.installed) ? "Outils détectés" : "Installation requise"} tone={tools.some(t => t.id === "adb" && t.installed) && tools.some(t => t.id === "scrcpy" && t.installed) ? "good" : "neutral"} action={() => void refreshLocal()}/>
               <ConnectorCard icon={<Network size={23}/>} title="WireGuard" category="Accès distant privé" description="À activer uniquement après validation des contrôles locaux, des clés individuelles et du pare-feu." state="Non configuré" tone="neutral" action={() => setNotice("WireGuard est planifié pour une phase ultérieure. Aucun port distant n'est ouvert par NEXUS CONTROL.")}/>
               <ConnectorCard icon={<Tv size={23}/>} title="Android TV" category="Téléviseurs et boîtiers" description="Les fonctions disponibles dépendront du modèle, des paramètres de débogage et des API du fabricant." state="À développer" tone="neutral" action={() => setNotice("Le connecteur Android TV sera évalué après le premier prototype Android.")}/>
@@ -226,8 +244,8 @@ function IntegrationRow({ icon, name, description, status, good }: { icon: React
 function QuickAction({ icon, title, desc, onClick }: { icon: ReactNode; title: string; desc: string; onClick: () => void }) {
   return <button className="quick-action" onClick={onClick}><div className="quick-icon">{icon}</div><div><strong>{title}</strong><span>{desc}</span></div><ArrowUpRight size={15} className="quick-arrow"/></button>;
 }
-function ConnectorCard({ icon, title, category, description, state, tone, action }: { icon: ReactNode; title: string; category: string; description: string; state: string; tone: string; action: () => void }) {
-  return <div className="connector-card"><div className="connector-top"><div className="connector-icon">{icon}</div><span className={`connector-state ${tone}`}><span className="status-dot"/>{state}</span></div><div className="connector-category">{category}</div><h3>{title}</h3><p>{description}</p><button className="connector-action" onClick={action}>Configurer / vérifier <ArrowUpRight size={15}/></button></div>;
+function ConnectorCard({ icon, title, category, description, state, tone, action, actionLabel = "Configurer / vérifier" }: { icon: ReactNode; title: string; category: string; description: string; state: string; tone: string; action: () => void; actionLabel?: string }) {
+  return <div className="connector-card"><div className="connector-top"><div className="connector-icon">{icon}</div><span className={`connector-state ${tone}`}><span className="status-dot"/>{state}</span></div><div className="connector-category">{category}</div><h3>{title}</h3><p>{description}</p><button className="connector-action" onClick={action}>{actionLabel} <ArrowUpRight size={15}/></button></div>;
 }
 function EmptyState({ icon, title, description, action, onAction }: { icon: ReactNode; title: string; description: string; action: string; onAction: () => void }) {
   return <div className="empty-state"><div className="empty-state-icon">{icon}</div><h3>{title}</h3><p>{description}</p><button className="button button-secondary" onClick={onAction}>{action}</button></div>;
