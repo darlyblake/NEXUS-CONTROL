@@ -12,6 +12,7 @@ type Page = "overview" | "devices" | "network" | "integrations" | "automations" 
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AndroidDevice = { id: string; state: string; model: string };
+type UpdateInfo = { currentVersion: string; version: string; downloadUrl: string; checksumUrl: string; assetName: string; notes: string };
 
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
@@ -54,6 +55,8 @@ function App() {
   const [runtime, setRuntime] = useState(isDesktopRuntime());
   const [notice, setNotice] = useState("Bienvenue dans NEXUS CONTROL. Les connecteurs ne sont pas encore configurés.");
   const [lastCheck, setLastCheck] = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
 
   const refreshLocal = useCallback(async () => {
     if (!isDesktopRuntime()) {
@@ -163,7 +166,41 @@ function App() {
     }
   }, []);
 
-  useEffect(() => { void refreshLocal(); }, [refreshLocal]);
+  useEffect(() => {
+    void refreshLocal();
+    if (isDesktopRuntime()) {
+      void invoke<UpdateInfo | null>("check_app_update")
+        .then((update) => {
+          if (update) {
+            setUpdateAvailable(update);
+            setNotice(`La version ${update.version} de NEXUS CONTROL est disponible. Tu peux l'installer maintenant.`);
+          }
+        })
+        .catch(() => {
+          // Une vérification de mise à jour qui échoue ne bloque pas l'application.
+        });
+    }
+  }, [refreshLocal]);
+
+  const installAppUpdate = useCallback(async () => {
+    if (!updateAvailable || installingUpdate) return;
+    const details = updateAvailable.notes ? `\\n\\nNotes : ${updateAvailable.notes}` : "";
+    const accepted = window.confirm(
+      `NEXUS CONTROL ${updateAvailable.version} est disponible (version actuelle : ${updateAvailable.currentVersion}).\\n\\nL'installation demandera ton mot de passe Ubuntu pour remplacer le paquet .deb.${details}\\n\\nInstaller maintenant ?`
+    );
+    if (!accepted) return;
+    setInstallingUpdate(true);
+    setNotice("Téléchargement et vérification de la mise à jour en cours…");
+    try {
+      const message = await invoke<string>("install_app_update");
+      setUpdateAvailable(null);
+      setNotice(message);
+    } catch (error) {
+      setNotice("La mise à jour n'a pas pu être installée : " + String(error));
+    } finally {
+      setInstallingUpdate(false);
+    }
+  }, [updateAvailable, installingUpdate]);
 
   const connectedAndroid = android.filter((d) => d.state === "device").length;
   const filteredAndroid = useMemo(() => {
@@ -237,7 +274,7 @@ function App() {
             </div>
           </div>
 
-          {notice && <div className="notice-line"><span className="notice-indicator"><AlertCircle size={15}/></span><span>{notice}</span><button aria-label="Fermer le message" onClick={() => setNotice("")}>×</button></div>}
+          {notice && <div className="notice-line"><span className="notice-indicator"><AlertCircle size={15}/></span><span>{notice}</span>{updateAvailable && <button className="button button-primary button-small" disabled={installingUpdate} onClick={() => void installAppUpdate()}>{installingUpdate ? "Installation…" : "Installer la mise à jour"}</button>}<button aria-label="Fermer le message" onClick={() => setNotice("")}>×</button></div>}
 
           {page === "overview" && <section className="page-body">
             <div className="welcome-panel">
