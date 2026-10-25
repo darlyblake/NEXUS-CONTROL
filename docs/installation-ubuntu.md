@@ -57,12 +57,16 @@ Si la version de scrcpy fournie par Ubuntu est ancienne, consulte le dépôt off
 
 ## 6. MeshCentral
 
-MeshCentral est un serveur distinct. NEXUS CONTROL ne le configure pas automatiquement et ne stocke pas ses identifiants.
+Dans l'application de bureau, ouvre **Intégrations → MeshCentral → Installer / configurer**. NEXUS CONTROL détecte Windows ou Linux et ouvre le script correspondant dans un terminal visible.
+
+Le script installe le paquet MeshCentral dans le dossier de données de l'utilisateur, crée une configuration locale sur le port 4430 si elle n'existe pas déjà, puis démarre le serveur. Il nécessite Node.js 20+ et npm. Sur Windows, si Node.js est absent et winget est disponible, l'installation de Node.js LTS est proposée ; relance ensuite l'intégration. Sur Ubuntu, le script indique les commandes à utiliser si Node.js/npm manquent ou sont trop anciens.
+
+Adresse de test : https://localhost:4430. Le serveur tourne tant que le terminal d'installation reste actif ; arrête-le avec Ctrl+C. La configuration existante est conservée lors des exécutions suivantes.
 
 Guide officiel : https://docs.meshcentral.com/install/quickstart/
 
-Ne l'expose pas sur Internet pendant les premiers tests. Valide la configuration locale, l'authentification et TLS avant de connecter des appareils.
+**Sécurité :** ce premier flux installe et démarre le serveur, mais n'installe pas encore les agents sur les autres appareils et ne connecte pas automatiquement ces appareils à NEXUS CONTROL. Ne l'expose pas sur Internet. Vérifie les comptes, TLS et le pare-feu avant tout usage sur un réseau partagé.
 
 ## 7. État des fonctions
 
-La première version comprend l'interface de bureau, la détection d'outils locaux et la découverte ADB. Le bureau distant via MeshCentral, le transfert de fichiers, les scripts et les automatisations restent à intégrer et tester. Ils ne doivent pas être considérés comme disponibles tant qu'ils ne sont pas reliés à un connecteur fonctionnel.
+La première version comprend l'interface de bureau, la détection d'outils locaux, la découverte ADB et un flux d'installation/démarrage local de MeshCentral sur Windows et Linux. Le contrôle des bureaux distants via MeshCentral, le transfert de fichiers, l'installation des agents, les scripts et les automatisations restent à intégrer et tester.
