@@ -4,17 +4,19 @@ import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
   HardDrive, LayoutDashboard, LockKeyhole, Monitor, MonitorSmartphone,
-  MoreHorizontal, Network, Plus, RefreshCw, Search, Settings2, ShieldCheck,
+  MoreHorizontal, Network, Plus, Radar, RefreshCw, Search, Settings2, ShieldCheck,
   Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap
 } from "lucide-react";
 
-type Page = "overview" | "devices" | "integrations" | "automations" | "activity" | "security" | "settings";
+type Page = "overview" | "devices" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
+type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AndroidDevice = { id: string; state: string; model: string };
 
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
+  { id: "network", label: "Analyse réseau", icon: Radar },
   { id: "integrations", label: "Intégrations", icon: Network },
   { id: "automations", label: "Automatisations", icon: Workflow },
   { id: "activity", label: "Journal d'activité", icon: Activity },
@@ -27,6 +29,7 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
+  network: { title: "Analyse réseau", subtitle: "Découvre les appareils qui répondent sur le même réseau local." },
   integrations: { title: "Intégrations", subtitle: "Connecteurs logiciels utilisés par NEXUS CONTROL." },
   automations: { title: "Automatisations", subtitle: "Prépare des tâches répétables, avec contrôle et journalisation." },
   activity: { title: "Journal d'activité", subtitle: "Historique des vérifications et des opérations locales." },
@@ -43,6 +46,9 @@ function App() {
   const [query, setQuery] = useState("");
   const [tools, setTools] = useState<LocalTool[]>([]);
   const [android, setAndroid] = useState<AndroidDevice[]>([]);
+  const [networkDevices, setNetworkDevices] = useState<NetworkDevice[]>([]);
+  const [networkScanning, setNetworkScanning] = useState(false);
+  const [connectingIp, setConnectingIp] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [installingIntegration, setInstallingIntegration] = useState<string | null>(null);
   const [runtime, setRuntime] = useState(isDesktopRuntime());
@@ -72,6 +78,42 @@ function App() {
     }
   }, []);
 
+  const scanNetwork = useCallback(async () => {
+    if (!isDesktopRuntime()) {
+      setNotice("L'analyse du réseau nécessite l'application de bureau NEXUS CONTROL.");
+      return;
+    }
+    setNetworkScanning(true);
+    setNotice("Analyse du réseau local en cours…");
+    try {
+      const devices = await invoke<NetworkDevice[]>("scan_network_devices");
+      setNetworkDevices(devices);
+      setNotice(`Analyse terminée : ${devices.length} appareil(s) détecté(s) sur le réseau local.`);
+    } catch (error) {
+      setNotice("Impossible d'analyser le réseau : " + String(error));
+    } finally {
+      setNetworkScanning(false);
+    }
+  }, []);
+
+  const connectNetworkAndroid = useCallback(async (ip: string) => {
+    if (!isDesktopRuntime()) {
+      setNotice("La connexion Android nécessite l'application de bureau NEXUS CONTROL.");
+      return;
+    }
+    setConnectingIp(ip);
+    setNotice("Recherche d'un service ADB autorisé sur " + ip + "…");
+    try {
+      const message = await invoke<string>("connect_network_android", { ip });
+      setNotice(message);
+      await refreshLocal();
+    } catch (error) {
+      setNotice(String(error));
+    } finally {
+      setConnectingIp(null);
+    }
+  }, [refreshLocal]);
+
   const installIntegration = useCallback(async (integrationId: string) => {
     if (!isDesktopRuntime()) {
       setNotice("L'installation automatique nécessite l'application de bureau NEXUS CONTROL, pas l'aperçu navigateur.");
@@ -98,7 +140,7 @@ function App() {
     return android.filter((device) => [device.id, device.model, device.state].some((v) => v.toLowerCase().includes(normalized)));
   }, [android, query]);
 
-  const navigate = (id: Page) => setPage(id);
+  const navigate = (id: Page) => { setPage(id); if (id === "network") void scanNetwork(); };
   const title = pageTitles[page];
 
   return (
@@ -192,6 +234,7 @@ function App() {
                 <div className="panel-header"><div><h3>Accès rapide</h3><p>Actions disponibles dans cette version</p></div></div>
                 <div className="quick-actions">
                   <QuickAction icon={<Smartphone size={18}/>} title="Détecter Android" desc="Scanner via ADB" onClick={() => void refreshLocal()}/>
+                  <QuickAction icon={<Radar size={18}/>} title="Analyser le réseau" desc="Rechercher les appareils du Wi-Fi local" onClick={() => navigate("network")}/>
                   <QuickAction icon={<Network size={18}/>} title="Configurer un connecteur" desc="Voir les intégrations" onClick={() => navigate("integrations")}/>
                   <QuickAction icon={<ShieldCheck size={18}/>} title="Vérifier la sécurité" desc="Consulter les règles locales" onClick={() => navigate("security")}/>
                   <QuickAction icon={<FileText size={18}/>} title="Feuille de route" desc="Consulter les prochaines étapes" onClick={() => navigate("activity")}/>
@@ -208,6 +251,34 @@ function App() {
               <div className="table-wrap"><table><thead><tr><th>APPAREIL</th><th>IDENTIFIANT</th><th>ÉTAT ADB</th><th>CONTRÔLE</th></tr></thead><tbody>{filteredAndroid.map((device) => <tr key={device.id}><td><div className="device-cell"><div className="device-icon"><Smartphone size={18}/></div><div><strong>{device.model || "Appareil Android"}</strong><span>Android / ADB</span></div></div></td><td className="mono">{device.id}</td><td><span className={`state-pill ${device.state === "device" ? "state-ready" : "state-warn"}`}><span className="status-dot"/>{device.state}</span></td><td><button className="button button-secondary button-small" disabled={!runtime || device.state !== "device" || !tools.some(t => t.id === "scrcpy" && t.installed)} onClick={() => void invoke("launch_scrcpy", { serial: device.id }).then(() => setNotice("scrcpy a été lancé pour " + device.id + ".")).catch((error) => setNotice("Impossible de lancer scrcpy : " + String(error)))}>Écran distant</button></td></tr>)}</tbody></table></div>}
             </div>
             <div className="info-banner"><CircleHelp size={17}/><div><strong>Les autres appareils apparaîtront ici après intégration.</strong><p>Windows/Linux via MeshCentral, Android TV via le connecteur compatible, et Apple selon les capacités de gestion autorisées.</p></div></div>
+          </section>}
+
+
+          {page === "network" && <section className="page-body">
+            <div className="network-hero">
+              <div className="network-hero-icon"><Radar size={25}/></div>
+              <div className="network-hero-copy"><h2>Appareils du réseau local</h2><p>Recherche automatique des appareils qui répondent sur le sous-réseau local. Clique sur un appareil pour afficher ses informations et tenter une connexion Android autorisée.</p></div>
+              <button className="button button-primary" onClick={() => void scanNetwork()} disabled={networkScanning}><Radar size={16} className={networkScanning ? "spin" : ""}/>{networkScanning ? "Analyse en cours…" : "Lancer l'analyse"}</button>
+            </div>
+            <div className="network-summary">
+              <div><span className="network-summary-label">Appareils détectés</span><strong>{networkDevices.length}</strong></div>
+              <div><span className="network-summary-label">Méthode</span><strong>Réseau local IPv4</strong></div>
+              <div><span className="network-summary-label">Connexion</span><strong>Après autorisation de l'appareil</strong></div>
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Résultats du scan</h3><p>Adresse IP, nom réseau et adresse MAC lorsqu'ils sont disponibles.</p></div><span className="count-pill">{networkDevices.length} appareil(s)</span></div>
+              {networkScanning && networkDevices.length === 0 ? <div className="network-empty"><Radar size={27} className="spin"/><strong>Recherche des appareils sur le réseau…</strong><span>Cette opération peut prendre quelques secondes.</span></div> :
+              networkDevices.length === 0 ? <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil trouvé pour le moment" description="Vérifie que le Wi-Fi est connecté et que les appareils sont sur le même réseau. Certains appareils ne répondent pas aux sondes réseau et peuvent ne pas apparaître." action="Réessayer" onAction={() => void scanNetwork()}/> :
+              <div className="network-device-grid">{networkDevices.map((device) => <article className="network-device-card" key={device.ip}>
+                <div className="network-device-top"><div className="network-device-icon">{device.kind.toLowerCase().includes("android") || device.hostname.toLowerCase().includes("tecno") ? <Smartphone size={20}/> : <MonitorSmartphone size={20}/>}</div><span className="state-pill state-ready"><span className="status-dot"/>En ligne</span></div>
+                <h3>{device.hostname || "Appareil sans nom"}</h3><p className="network-device-kind">{device.kind}</p>
+                <div className="network-info-row"><span>Adresse IP</span><strong className="mono">{device.ip}</strong></div>
+                <div className="network-info-row"><span>Adresse MAC</span><strong className="mono">{device.mac || "Non disponible"}</strong></div>
+                <div className="network-info-row"><span>Nom réseau</span><strong>{device.hostname || "Non communiqué"}</strong></div>
+                <button className="button button-secondary full-button" disabled={!!connectingIp || !tools.some(t => t.id === "adb" && t.installed)} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>
+              </article>)}</div>}
+            </div>
+            <div className="info-banner"><CircleHelp size={17}/><div><strong>À savoir sur Android</strong><p>Le scan est automatique, mais Android n'autorise pas le contrôle à distance simplement parce qu'il est sur le même Wi-Fi. La connexion se fera si le débogage sans fil est actif et si ADB a déjà été autorisé/appairé. Si ce n'est pas le cas, l'application expliquera ce qui manque au lieu de contourner la sécurité du téléphone.</p></div></div>
           </section>}
 
           {page === "integrations" && <section className="page-body">
