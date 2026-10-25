@@ -721,7 +721,8 @@ fn main() {
             install_integration,
             check_app_update,
             install_app_update,
-            open_remote_console
+            open_remote_console,
+            get_security_audit
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");
