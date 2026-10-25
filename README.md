@@ -9,6 +9,7 @@ Application de bureau open source pour administrer les appareils personnels depu
 - Détection locale des outils ADB, scrcpy, Node.js, MeshCentral CLI et WireGuard.
 - Découverte des appareils Android via `adb devices -l`.
 - Lancement de scrcpy depuis la fiche d'un appareil, après validation qu'il est toujours connecté et autorisé.
+- Scripts d’installation MeshCentral distincts pour Windows et Linux, lancés dans un terminal visible depuis la carte d’intégration (Node.js 20+ requis).
 - Pages de préparation des intégrations, sécurité, journal et paramètres.
 
 Les fonctions de bureau distant MeshCentral, transfert de fichiers, scripts, automatisations, Android TV, Home Assistant et gestion Apple restent à intégrer. L'interface indique leur état sans prétendre qu'elles sont déjà opérationnelles.
