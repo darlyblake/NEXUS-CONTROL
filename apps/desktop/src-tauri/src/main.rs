@@ -464,6 +464,165 @@ fn install_meshcentral() -> Result<String, String> {
     }
 }
 
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo {
+    current_version: String,
+    version: String,
+    download_url: String,
+    checksum_url: String,
+    asset_name: String,
+    notes: String,
+}
+
+fn current_app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+fn version_parts(value: &str) -> Vec<u64> {
+    value.trim_start_matches('v')
+        .split('.')
+        .map(|part| part.split(|ch: char| !ch.is_ascii_digit()).next().unwrap_or("").parse::<u64>().unwrap_or(0))
+        .collect()
+}
+
+fn is_newer_version(candidate: &str, current: &str) -> bool {
+    version_parts(candidate) > version_parts(current)
+}
+
+#[cfg(target_os = "linux")]
+fn fetch_latest_release() -> Result<Option<serde_json::Value>, String> {
+    let path = std::env::temp_dir().join(format!("nexus-control-release-{}.json", std::process::id()));
+    let output = Command::new("curl")
+        .args(["--proto", "=https", "--tlsv1.2", "-fLsS", "--retry", "2", "-o"])
+        .arg(&path)
+        .arg("https://api.github.com/repos/darlyblake/NEXUS-CONTROL/releases/latest")
+        .output()
+        .map_err(|error| format!("Impossible de vérifier GitHub : {error}"))?;
+    if !output.status.success() {
+        let _ = fs::remove_file(&path);
+        let error = String::from_utf8_lossy(&output.stderr);
+        if error.contains("404") {
+            return Ok(None);
+        }
+        return Err(format!("Vérification GitHub impossible : {}", error.trim()));
+    }
+    let content = fs::read_to_string(&path).map_err(|error| format!("Lecture de la réponse GitHub impossible : {error}"))?;
+    let _ = fs::remove_file(&path);
+    let release: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|error| format!("Réponse GitHub invalide : {error}"))?;
+    Ok(Some(release))
+}
+
+#[tauri::command]
+fn check_app_update() -> Result<Option<UpdateInfo>, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let Some(release) = fetch_latest_release()? else { return Ok(None); };
+        let tag = release.get("tag_name").and_then(|value| value.as_str()).unwrap_or("");
+        let version = tag.trim_start_matches('v');
+        if version.is_empty() || !is_newer_version(version, current_app_version()) {
+            return Ok(None);
+        }
+        let assets = release.get("assets").and_then(|value| value.as_array()).ok_or("La version publiée ne contient pas de fichiers téléchargeables.")?;
+        let deb = assets.iter().find(|asset| asset.get("name").and_then(|v| v.as_str()) == Some("nexus-control-linux.deb"))
+            .ok_or("Le paquet Linux .deb est absent de la dernière version GitHub.")?;
+        let sums = assets.iter().find(|asset| asset.get("name").and_then(|v| v.as_str()) == Some("SHA256SUMS"))
+            .ok_or("Le fichier de vérification SHA256 est absent de la dernière version.")?;
+        let download_url = deb.get("browser_download_url").and_then(|v| v.as_str()).unwrap_or("");
+        let checksum_url = sums.get("browser_download_url").and_then(|v| v.as_str()).unwrap_or("");
+        let allowed_prefix = format!("https://github.com/darlyblake/NEXUS-CONTROL/releases/download/{tag}/");
+        if !download_url.starts_with(&allowed_prefix) || !checksum_url.starts_with(&allowed_prefix) {
+            return Err("Les liens de mise à jour ne correspondent pas au dépôt officiel NEXUS CONTROL.".to_string());
+        }
+        return Ok(Some(UpdateInfo {
+            current_version: current_app_version().to_string(),
+            version: version.to_string(),
+            download_url: download_url.to_string(),
+            checksum_url: checksum_url.to_string(),
+            asset_name: "nexus-control-linux.deb".to_string(),
+            notes: release.get("body").and_then(|v| v.as_str()).unwrap_or("").chars().take(1200).collect(),
+        }));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(None)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn download_https(url: &str, destination: &PathBuf) -> Result<(), String> {
+    if !url.starts_with("https://github.com/darlyblake/NEXUS-CONTROL/releases/download/") {
+        return Err("Source de téléchargement refusée : dépôt non reconnu.".to_string());
+    }
+    let output = Command::new("curl")
+        .args(["--proto", "=https", "--tlsv1.2", "-fLsS", "--retry", "2", "-o"])
+        .arg(destination)
+        .arg(url)
+        .output()
+        .map_err(|error| format!("Impossible de télécharger le fichier : {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Téléchargement échoué : {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn install_app_update() -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let update = check_app_update()?.ok_or("Aucune nouvelle version Linux n'est actuellement disponible.")?;
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs()).unwrap_or(0);
+        let base = std::env::temp_dir().join(format!("nexus-control-update-{}-{nonce}", std::process::id()));
+        let deb_path = base.with_extension("deb");
+        let sums_path = base.with_extension("sha256sums");
+        download_https(&update.download_url, &deb_path)?;
+        if let Err(error) = download_https(&update.checksum_url, &sums_path) {
+            let _ = fs::remove_file(&deb_path);
+            return Err(error);
+        }
+        let sums = fs::read_to_string(&sums_path).map_err(|error| format!("Impossible de lire le fichier SHA256 : {error}"))?;
+        let expected = sums.lines().find_map(|line| {
+            let mut fields = line.split_whitespace();
+            let hash = fields.next()?;
+            let name = fields.next()?.trim_start_matches('*');
+            if name == update.asset_name { Some(hash.to_string()) } else { None }
+        }).ok_or("Le fichier SHA256 ne contient pas le paquet Linux attendu.")?;
+        if expected.len() != 64 || !expected.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            let _ = fs::remove_file(&deb_path);
+            let _ = fs::remove_file(&sums_path);
+            return Err("Le hash SHA256 publié est invalide.".to_string());
+        }
+        let hash_output = Command::new("sha256sum").arg(&deb_path).output()
+            .map_err(|error| format!("Impossible de vérifier l'intégrité du paquet : {error}"))?;
+        let actual = String::from_utf8_lossy(&hash_output.stdout).split_whitespace().next().unwrap_or("").to_string();
+        if !hash_output.status.success() || !actual.eq_ignore_ascii_case(&expected) {
+            let _ = fs::remove_file(&deb_path);
+            let _ = fs::remove_file(&sums_path);
+            return Err("La vérification SHA256 a échoué. Le paquet n'a pas été installé.".to_string());
+        }
+        let status = Command::new("pkexec")
+            .arg("apt-get")
+            .arg("install")
+            .arg("-y")
+            .arg(&deb_path)
+            .status()
+            .map_err(|error| format!("Impossible d'ouvrir l'autorisation administrateur Ubuntu : {error}"))?;
+        let _ = fs::remove_file(&deb_path);
+        let _ = fs::remove_file(&sums_path);
+        if !status.success() {
+            return Err("L'installation a été annulée ou a échoué. La version actuelle est conservée.".to_string());
+        }
+        return Ok(format!("NEXUS CONTROL {} a été installé. Ferme puis rouvre l'application pour démarrer la nouvelle version.", update.version));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Err("La mise à jour intégrée du paquet .deb est disponible uniquement sous Linux.".to_string())
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -472,7 +631,9 @@ fn main() {
             scan_network_devices,
             connect_network_android,
             launch_scrcpy,
-            install_integration
+            install_integration,
+            check_app_update,
+            install_app_update
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");
