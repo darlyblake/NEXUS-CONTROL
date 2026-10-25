@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
-  HardDrive, LayoutDashboard, LockKeyhole, Monitor, MonitorSmartphone,
+  HardDrive, LayoutDashboard, Link2, LockKeyhole, Monitor, MonitorSmartphone,
   MoreHorizontal, Network, Plus, Radar, RefreshCw, Search, Settings2, ShieldCheck,
   Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap
 } from "lucide-react";
 
-type Page = "overview" | "devices" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
+type Page = "overview" | "devices" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AndroidDevice = { id: string; state: string; model: string };
@@ -17,6 +17,7 @@ type UpdateInfo = { currentVersion: string; version: string; downloadUrl: string
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
+  { id: "remote", label: "Accès distant", icon: Link2 },
   { id: "network", label: "Analyse réseau", icon: Radar },
   { id: "integrations", label: "Intégrations", icon: Network },
   { id: "automations", label: "Automatisations", icon: Workflow },
@@ -30,6 +31,7 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
+  remote: { title: "Accès distant", subtitle: "Prépare une connexion Internet sécurisée vers un serveur distant autorisé." },
   network: { title: "Analyse réseau", subtitle: "Découvre les appareils qui répondent sur le même réseau local." },
   integrations: { title: "Intégrations", subtitle: "Connecteurs logiciels utilisés par NEXUS CONTROL." },
   automations: { title: "Automatisations", subtitle: "Prépare des tâches répétables, avec contrôle et journalisation." },
@@ -57,6 +59,8 @@ function App() {
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [remoteServerUrl, setRemoteServerUrl] = useState(() => { try { return localStorage.getItem("nexus.remoteServerUrl") || ""; } catch { return ""; } });
+  const [openingRemoteConsole, setOpeningRemoteConsole] = useState(false);
 
   const refreshLocal = useCallback(async () => {
     if (!isDesktopRuntime()) {
@@ -322,6 +326,38 @@ function App() {
             <div className="info-banner"><CircleHelp size={17}/><div><strong>Les autres appareils apparaîtront ici après intégration.</strong><p>Windows/Linux via MeshCentral, Android TV via le connecteur compatible, et Apple selon les capacités de gestion autorisées.</p></div></div>
           </section>}
 
+
+          {page === "remote" && <section className="page-body">
+            <div className="network-hero">
+              <div className="network-hero-icon"><Link2 size={25}/></div>
+              <div className="network-hero-copy"><h2>Relier des appareils par Internet</h2><p>Configure l'adresse HTTPS de ton serveur MeshCentral. Les appareils distants doivent y être enregistrés avec un agent autorisé. NEXUS CONTROL n'ouvre aucun port entrant sur cet ordinateur.</p></div>
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Serveur distant</h3><p>Adresse publique de ta console, par exemple https://controle.ton-domaine.tld</p></div><span className="count-pill">HTTPS requis</span></div>
+              <label className="remote-field-label" htmlFor="remote-server-url">URL publique MeshCentral</label>
+              <input id="remote-server-url" className="remote-server-input" type="url" placeholder="https://controle.exemple.com" value={remoteServerUrl} onChange={event => { setRemoteServerUrl(event.target.value); try { localStorage.setItem("nexus.remoteServerUrl", event.target.value.trim()); } catch { /* stockage facultatif */ } }} />
+              <div className="heading-actions remote-actions">
+                <button className="button button-primary" disabled={!remoteServerUrl.trim() || openingRemoteConsole} onClick={() => {
+                  if (!isDesktopRuntime()) {
+                    try { const parsed = new URL(remoteServerUrl); if (parsed.protocol !== "https:") { setNotice("Utilise une adresse HTTPS pour protéger la connexion."); return; } window.open(parsed.toString(), "_blank", "noopener,noreferrer"); }
+                    catch { setNotice("Adresse du serveur invalide."); }
+                    return;
+                  }
+                  setOpeningRemoteConsole(true);
+                  void invoke<string>("open_remote_console", { url: remoteServerUrl.trim() }).then(message => setNotice(message)).catch(error => setNotice(String(error))).finally(() => setOpeningRemoteConsole(false));
+                }}><ArrowUpRight size={16}/>{openingRemoteConsole ? "Ouverture…" : "Ouvrir la console distante"}</button>
+                <button className="button button-secondary" onClick={() => { setRemoteServerUrl(""); try { localStorage.removeItem("nexus.remoteServerUrl"); } catch { /* stockage facultatif */ } }}>Effacer l'adresse</button>
+              </div>
+            </div>
+            <div className="info-banner"><ShieldCheck size={17}/><div><strong>Avant de contrôler un appareil</strong><p>1. Déployer MeshCentral sur un serveur accessible en HTTPS. 2. Installer l'agent officiel sur l'ordinateur distant et approuver son rattachement. 3. Se connecter à la console et limiter les droits aux opérateurs autorisés. 4. Utiliser les fonctions de partage/invitation du serveur lorsqu'un accès temporaire est nécessaire.</p></div></div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>État de l'intégration</h3><p>NEXUS CONTROL ne déclare pas une session active sans vérification du serveur.</p></div></div>
+              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Serveur public</strong><span>À configurer et à vérifier</span></div><span className="security-state pending-text">En attente</span></div>
+              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Contrôle distant et transfert de fichiers</strong><span>Selon les permissions et les capacités du serveur/agent.</span></div><span className="security-state pending-text">Non vérifiés</span></div>
+              <div className="security-row"><div className="security-row-icon secure"><Check size={16}/></div><div className="security-row-copy"><strong>Autorisation explicite</strong><span>Ne partage pas une invitation avec une personne non autorisée. Révoque les accès qui ne sont plus nécessaires.</span></div><span className="security-state secure-text">Obligatoire</span></div>
+            </div>
+            <div className="info-banner"><CircleHelp size={17}/><div><strong>Important pour Android</strong><p>Cette console ne donne pas automatiquement le contrôle d'un téléphone Android. Le contrôle Android nécessite un connecteur compatible, une configuration prise en charge par le téléphone et une autorisation explicite sur celui-ci.</p></div></div>
+          </section>}
 
           {page === "network" && <section className="page-body">
             <div className="network-hero">
