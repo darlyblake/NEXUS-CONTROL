@@ -257,18 +257,18 @@ function App() {
           {page === "network" && <section className="page-body">
             <div className="network-hero">
               <div className="network-hero-icon"><Radar size={25}/></div>
-              <div className="network-hero-copy"><h2>Appareils du réseau local</h2><p>Recherche automatique des appareils qui répondent sur le sous-réseau local. Clique sur un appareil pour afficher ses informations et tenter une connexion Android autorisée.</p></div>
+              <div className="network-hero-copy"><h2>Appareils du réseau local</h2><p>Recherche avec Nmap (découverte sans scan de ports), arp-scan si disponible, puis ping et table ARP en secours. Clique sur un appareil pour afficher ses informations et tenter une connexion Android autorisée.</p></div>
               <button className="button button-primary" onClick={() => void scanNetwork()} disabled={networkScanning}><Radar size={16} className={networkScanning ? "spin" : ""}/>{networkScanning ? "Analyse en cours…" : "Lancer l'analyse"}</button>
             </div>
             <div className="network-summary">
               <div><span className="network-summary-label">Appareils détectés</span><strong>{networkDevices.length}</strong></div>
-              <div><span className="network-summary-label">Méthode</span><strong>Réseau local IPv4</strong></div>
+              <div><span className="network-summary-label">Méthodes</span><strong>Nmap · ARP · Ping</strong></div>
               <div><span className="network-summary-label">Connexion</span><strong>Après autorisation de l'appareil</strong></div>
             </div>
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>Résultats du scan</h3><p>Adresse IP, nom réseau et adresse MAC lorsqu'ils sont disponibles.</p></div><span className="count-pill">{networkDevices.length} appareil(s)</span></div>
               {networkScanning && networkDevices.length === 0 ? <div className="network-empty"><Radar size={27} className="spin"/><strong>Recherche des appareils sur le réseau…</strong><span>Cette opération peut prendre quelques secondes.</span></div> :
-              networkDevices.length === 0 ? <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil trouvé pour le moment" description="Vérifie que le Wi-Fi est connecté et que les appareils sont sur le même réseau. Certains appareils ne répondent pas aux sondes réseau et peuvent ne pas apparaître." action="Réessayer" onAction={() => void scanNetwork()}/> :
+              networkDevices.length === 0 ? <EmptyState icon={<Wifi size={24}/>} title="Aucun appareil trouvé pour le moment" description="Vérifie que le Wi-Fi est connecté et que les appareils sont sur le même réseau. Installe Nmap pour améliorer la découverte (Ubuntu : sudo apt install nmap). arp-scan peut compléter les résultats avec sudo apt install arp-scan, mais nécessite parfois des permissions supplémentaires. Certains appareils restent invisibles." action="Réessayer" onAction={() => void scanNetwork()}/> :
               <div className="network-device-grid">{networkDevices.map((device) => <article className="network-device-card" key={device.ip}>
                 <div className="network-device-top"><div className="network-device-icon">{device.kind.toLowerCase().includes("android") || device.hostname.toLowerCase().includes("tecno") ? <Smartphone size={20}/> : <MonitorSmartphone size={20}/>}</div><span className="state-pill state-ready"><span className="status-dot"/>En ligne</span></div>
                 <h3>{device.hostname || "Appareil sans nom"}</h3><p className="network-device-kind">{device.kind}</p>
