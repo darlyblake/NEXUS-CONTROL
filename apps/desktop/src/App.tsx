@@ -5,10 +5,10 @@ import {
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
   HardDrive, LayoutDashboard, Link2, LockKeyhole, Monitor, MonitorSmartphone,
   MoreHorizontal, Network, Plus, Radar, RefreshCw, Search, Settings2, ShieldCheck,
-  Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap
+  Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert
 } from "lucide-react";
 
-type Page = "overview" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
+type Page = "overview" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
@@ -27,6 +27,7 @@ const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
 ];
 const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
   { id: "security", label: "Sécurité", icon: ShieldCheck },
+  { id: "protection", label: "Protection antivol", icon: ShieldAlert },
   { id: "settings", label: "Paramètres", icon: Settings2 },
 ];
 
@@ -40,6 +41,7 @@ const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   automations: { title: "Automatisations", subtitle: "Prépare des tâches répétables, avec contrôle et journalisation." },
   activity: { title: "Journal d'activité", subtitle: "Historique des vérifications et des opérations locales." },
   security: { title: "Sécurité", subtitle: "Les accès distants restent désactivés tant qu'ils ne sont pas configurés." },
+  protection: { title: "Protection antivol", subtitle: "Commandes de protection Android, état des capacités et préparation de l'administration de l'appareil." },
   settings: { title: "Paramètres", subtitle: "Configuration locale de l'application et de ses connecteurs." },
 };
 
@@ -634,6 +636,34 @@ function App() {
             <div className="panel security-panel"><div className="panel-header"><div><h3>Règles avant le contrôle distant</h3><p>Ces contrôles de sécurité restent nécessaires avant toute connexion inter-réseaux.</p></div></div><SecurityRow title="Autorisation de l'appareil distant" detail="Le propriétaire doit accepter explicitement l'accès." state="Obligatoire" good={true}/><SecurityRow title="Tunnel chiffré ou serveur HTTPS" detail="Utiliser WireGuard ou un serveur distant configuré en HTTPS." state="À configurer" good={false}/><SecurityRow title="Journal d'audit persistant" detail="La journalisation persistante des sessions distantes reste à développer." state="À développer" good={false}/></div>
           </section>}
 
+          {page === "protection" && <section className="page-body">
+            <div className="security-hero"><div className="security-shield"><ShieldAlert size={28}/></div><div><span className="security-kicker">PROTECTION ANDROID</span><h2>Préparer les fonctions antivol de l’appareil.</h2><p>Interface de préparation : les commandes ci-dessous ne sont pas encore reliées à un agent Android distant.</p></div></div>
+            <div className="stats-grid">
+              <StatCard icon={<Smartphone size={19}/>} label="Android via ADB" value={String(connectedAndroid)} foot={connectedAndroid ? "Appareil local autorisé" : "Aucun appareil autorisé détecté"} tone="blue"/>
+              <StatCard icon={<MapPin size={19}/>} label="Localisation GPS" value="À intégrer" foot="Permissions Android et relais requis" tone="violet"/>
+              <StatCard icon={<Volume2 size={19}/>} label="Sonnerie à distance" value="À intégrer" foot="Nécessite agent et relais en ligne" tone="orange"/>
+              <StatCard icon={<ShieldCheck size={19}/>} label="Mode administré" value="Non vérifié" foot="Device Owner non détecté par cette interface" tone="green"/>
+            </div>
+            <div className="dashboard-columns"><div className="panel"><div className="panel-header"><div><h3>Actions antivol prévues</h3><p>Fonctions à connecter à un agent autorisé et à un serveur sécurisé.</p></div><LockKeyhole size={19}/></div>
+              <div className="integration-list">
+                <IntegrationRow icon={<MapPin size={19}/>} name="Demander la position" description="Position actuelle ou dernière position connue avec son horodatage." status="Connecteur requis" good={false}/>
+                <IntegrationRow icon={<Volume2 size={19}/>} name="Faire sonner" description="Déclencher une alerte sonore sur l’appareil associé." status="Connecteur requis" good={false}/>
+                <IntegrationRow icon={<MessageSquare size={19}/>} name="Message sur écran verrouillé" description="Afficher les coordonnées du propriétaire via les fonctions autorisées par Android." status="Connecteur requis" good={false}/>
+                <IntegrationRow icon={<ShieldAlert size={19}/>} name="Alertes de sécurité" description="Recevoir les événements que l’OS et l’agent sont autorisés à observer." status="Connecteur requis" good={false}/>
+                <IntegrationRow icon={<Camera size={19}/>} name="Médias d’incident" description="Toute capture doit respecter les permissions et les indicateurs système requis." status="Non activé" good={false}/>
+              </div><div className="info-banner"><CircleHelp size={17}/><div><strong>Aucune commande distante n’est exécutée par cette page.</strong><p>Le relais expérimental actuel ne gère pas encore les commandes antivol.</p></div></div></div>
+              <div className="panel"><div className="panel-header"><div><h3>Appareil administré</h3><p>Pour un téléphone personnel ou un parc dont tu es l’administrateur.</p></div><ShieldCheck size={19}/></div>
+                <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Android Enterprise — Device Owner</strong><span>À provisionner explicitement pendant la configuration initiale ou après réinitialisation. Peut limiter la désinstallation selon les politiques autorisées.</span></div></div>
+                <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Association et révocation</strong><span>Association visible, clés individuelles et révocation depuis le PC.</span></div></div>
+                <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Protection contre les abus</strong><span>Commandes authentifiées, journal d’audit, chiffrement et limitation de débit.</span></div></div>
+                <button className="button button-secondary full-button" onClick={() => setNotice("Consulte docs/antitheft-device-management.md. Cette interface n’active pas automatiquement Device Owner.")}>Voir les prérequis d’administration</button></div></div>
+            <div className="panel security-panel"><div className="panel-header"><div><h3>Outils de cybersécurité sur Linux</h3><p>À utiliser pour tester le serveur et le réseau dans un environnement que tu contrôles.</p></div><Terminal size={19}/></div>
+              <div className="security-row"><div className="security-row-icon secure"><Check size={16}/></div><div className="security-row-copy"><strong>Nmap</strong><span>Inventaire des hôtes du réseau autorisé ; cibler les tests réseau.</span></div></div>
+              <div className="security-row"><div className="security-row-icon secure"><Check size={16}/></div><div className="security-row-copy"><strong>Wireshark / TShark</strong><span>Diagnostiquer les connexions et vérifier que les secrets ne circulent pas en clair.</span></div></div>
+              <div className="security-row"><div className="security-row-icon secure"><Check size={16}/></div><div className="security-row-copy"><strong>OWASP ZAP</strong><span>Tester l’API du relais de test : authentification et contrôle d’accès.</span></div></div>
+              <div className="security-row"><div className="security-row-icon secure"><Check size={16}/></div><div className="security-row-copy"><strong>ADB et Android Studio</strong><span>Inspecter les journaux et tester les permissions sur ton propre appareil.</span></div></div>
+              <div className="info-banner"><CircleHelp size={17}/><div><strong>Kali Linux n’accorde pas automatiquement plus de droits à Android.</strong><p>Ces outils servent à auditer le système ; ils ne remplacent pas les permissions ni le provisioning Device Owner.</p></div></div></div>
+          </section>}
           {page === "settings" && <section className="page-body"><div className="settings-grid"><div className="panel setting-panel"><div className="setting-icon"><Monitor size={20}/></div><h3>Application</h3><p>Interface de bureau Tauri + React + TypeScript.</p><div className="setting-meta"><span>Version</span><strong>0.1.0 · prototype</strong></div><div className="setting-meta"><span>Environnement</span><strong>{runtime ? "Tauri Desktop" : "Aperçu navigateur"}</strong></div></div><div className="panel setting-panel"><div className="setting-icon"><Wrench size={20}/></div><h3>Outils locaux</h3><p>Détection des dépendances présentes sur ce poste.</p>{tools.length ? tools.map(tool => <div className="setting-meta" key={tool.id}><span>{tool.label}</span><strong className={tool.installed ? "text-good" : "text-muted"}>{tool.installed ? "Détecté" : "Absent"}</strong></div>) : <div className="setting-meta"><span>État</span><strong>En attente du runtime natif</strong></div>}<button className="button button-secondary full-button" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={15}/> Vérifier les outils</button></div><div className="panel setting-panel"><div className="setting-icon"><HardDrive size={20}/></div><h3>Données locales</h3><p>La base de données locale et les sauvegardes seront ajoutées après stabilisation du modèle des appareils.</p><div className="setting-meta"><span>Serveur distant</span><strong>Non configuré</strong></div><div className="setting-meta"><span>Stockage</span><strong>Pas de données persistantes</strong></div></div></div></section>}
           <footer className="page-footer"><span>NEXUS CONTROL <span className="footer-sep">·</span> Prototype 0.1.0</span><span><span className="status-dot dot-green"/> Local d'abord, sécurisé par conception</span></footer>
         </div>
