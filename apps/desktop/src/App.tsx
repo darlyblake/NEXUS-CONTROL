@@ -86,6 +86,7 @@ function App() {
   const [remoteRelayStatus, setRemoteRelayStatus] = useState("Non connecté");
   const [remoteCommandResult, setRemoteCommandResult] = useState("Aucune commande envoyée.");
   const [remotePeerRole, setRemotePeerRole] = useState<"android" | "windows" | null>(null);
+  const [remoteControlCompanionConnected, setRemoteControlCompanionConnected] = useState(false);
   const [remotePowerShellScript, setRemotePowerShellScript] = useState("Get-ComputerInfo | Select-Object CsName, WindowsProductName, OsVersion");
   const [remoteLastLocation, setRemoteLastLocation] = useState<{ latitude: number; longitude: number; accuracyMeters?: number; locationTime?: number; provider?: string } | null>(null);
   const [remoteMessage, setRemoteMessage] = useState("Téléphone perdu. Merci de contacter son propriétaire.");
@@ -123,9 +124,10 @@ function App() {
           const message = JSON.parse(String(event.data)) as { type?: string; role?: string; connected?: boolean; action?: string; ok?: boolean; detail?: string; output?: string; latitude?: number; longitude?: number; accuracyMeters?: number; locationTime?: number; provider?: string };
           if (message.type === "authenticated") setRemoteRelayStatus("Relais authentifié — en attente de l’appareil cible");
           if (message.type === "peer_status") {
+            if (message.role === "windows_ui") setRemoteControlCompanionConnected(Boolean(message.connected));
             if (message.connected && (message.role === "windows" || message.role === "android")) setRemotePeerRole(message.role);
             if (!message.connected && (message.role === "windows" || message.role === "android")) setRemotePeerRole(null);
-            setRemoteRelayStatus(message.connected ? (message.role === "windows" ? "Agent Windows connecté" : message.role === "android" ? "Agent Android connecté" : "Contrôleur connecté") : "En attente de l’appareil cible");
+            setRemoteRelayStatus(message.connected ? (message.role === "windows" ? "Agent Windows connecté" : message.role === "android" ? "Agent Android connecté" : message.role === "windows_ui" ? "Compagnon Windows connecté" : "Contrôleur connecté") : "En attente de l’appareil cible");
           }
           if (message.type === "command_result") {
             setRemoteCommandResult((message.action || "Commande") + " : " + (message.ok ? "réussie" : "échec") + (message.detail ? " — " + message.detail : "") + (message.output ? "\n" + message.output : ""));
@@ -136,7 +138,7 @@ function App() {
         } catch { /* ignore les messages de statut non JSON */ }
       };
       socket.onerror = () => setRemoteRelayStatus("Erreur de connexion au relais");
-      socket.onclose = () => setRemoteRelayStatus("Déconnecté du relais");
+      socket.onclose = () => { setRemoteRelayStatus("Déconnecté du relais"); setRemoteControlCompanionConnected(false); setRemotePeerRole(null); };
       setNotice("Code d’association créé. Saisis-le dans l’agent de l’appareil cible (Windows ou Android) avant son expiration.");
     } catch (error) {
       setRemoteRelayStatus("Association indisponible");
@@ -562,7 +564,7 @@ function App() {
               {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur l’appareil cible dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
               <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
               {remotePeerRole === "windows" && <ScreenSharePanel socket={remoteSocketRef.current} connected={remoteRelayStatus.includes("connecté") || remoteRelayStatus.includes("authentifié")} onNotice={setNotice} />}
-              {remotePeerRole === "windows" && <RemoteInputPanel socket={remoteSocketRef.current} connected={remoteRelayStatus.includes("connecté") || remoteRelayStatus.includes("authentifié")} onNotice={setNotice} />}
+              {remotePeerRole === "windows" && <RemoteInputPanel socket={remoteSocketRef.current} connected={remoteControlCompanionConnected} onNotice={setNotice} />}
               {remotePeerRole === "windows" && <div className="panel device-panel">
                 <div className="panel-header"><div><h3>Contrôle Windows</h3><p>Commandes envoyées uniquement à l’agent Windows authentifié dans cette association.</p></div><Terminal size={20}/></div>
                 <div className="heading-actions remote-actions">
