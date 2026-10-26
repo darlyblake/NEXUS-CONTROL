@@ -38,6 +38,8 @@ class MainActivity : Activity() {
     private var selectedFile: Uri? = null
     private var selectedFileName: String = ""
     private var receiver: LocalTransferServer? = null
+    private var remoteClient: RemoteRelayClient? = null
+    private var remoteStatusView: TextView? = null
     private var receiverToken: String = UUID.randomUUID().toString().replace("-", "")
     private val prefs by lazy { getSharedPreferences("nexus_agent", Context.MODE_PRIVATE) }
 
@@ -89,6 +91,7 @@ class MainActivity : Activity() {
             Triple("send", "↑", "Envoyer"),
             Triple("receive", "↓", "Réception"),
             Triple("device", "▣", "Appareil"),
+            Triple("remote", "↔", "Distant"),
             Triple("security", "◇", "Sécurité")
         )
         menu.forEach { item ->
@@ -132,6 +135,7 @@ class MainActivity : Activity() {
             "send" -> buildSendPage()
             "receive" -> buildReceivePage()
             "device" -> buildDevicePage()
+            "remote" -> buildRemotePage()
             "security" -> buildSecurityPage()
         }
     }
@@ -252,6 +256,63 @@ class MainActivity : Activity() {
         renderTrustedDevices()
     }
 
+    private fun buildRemotePage() {
+        label("ACCÈS DISTANT", 12f, accent, true)
+        label("Associer au PC", 23f, textColor, true)
+        label("Le PC et le téléphone peuvent être sur des réseaux différents. Un relais NEXUS accessible en HTTPS/WSS est nécessaire.", 13f, muted, false)
+        section("RELAIS SÉCURISÉ")
+        val relayUrl = EditText(this).apply {
+            hint = "https://relais.ton-domaine.tld"
+            setSingleLine(true); setTextColor(textColor); setHintTextColor(muted)
+            setPadding(dp(12), dp(12), dp(12), dp(12)); setBackgroundColor(panel)
+            setText(prefs.getString("relay_base_url", "") ?: "")
+        }
+        root.addView(relayUrl, LinearLayout.LayoutParams(-1, -2))
+        space(10)
+        val pairCode = EditText(this).apply {
+            hint = "Code temporaire affiché sur le PC"
+            setSingleLine(true); setTextColor(textColor); setHintTextColor(muted)
+            setPadding(dp(12), dp(12), dp(12), dp(12)); setBackgroundColor(panel)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+        }
+        root.addView(pairCode, LinearLayout.LayoutParams(-1, -2))
+        space(10)
+        val status = TextView(this).apply {
+            text = "Aucune session distante active."
+            textSize = 13f; setTextColor(muted); setPadding(0, dp(8), 0, dp(8))
+        }
+        remoteStatusView = status
+        root.addView(status)
+        action("Associer et connecter", "Utilise le code affiché dans NEXUS CONTROL sur le PC.") {
+            val base = relayUrl.text.toString().trim().trimEnd('/')
+            val code = pairCode.text.toString().trim().uppercase()
+            if (!base.startsWith("https://") && !base.startsWith("http://10.0.2.2") && !base.startsWith("http://localhost")) {
+                dialog("Adresse du relais", "Utilise une adresse HTTPS publique avec un certificat valide.")
+            } else if (code.isBlank()) {
+                dialog("Code manquant", "Crée d'abord un code d'association depuis le PC.")
+            } else {
+                prefs.edit().putString("relay_base_url", base).apply()
+                status.text = "Association en cours…"
+                val deviceId = prefs.getString("relay_device_id", null) ?: ("android-" + UUID.randomUUID().toString()).also {
+                    prefs.edit().putString("relay_device_id", it).apply()
+                }
+                if (remoteClient == null) remoteClient = RemoteRelayClient(this)
+                remoteClient?.pairAndConnect(base, code, deviceId) { message -> runOnUiThread { remoteStatusView?.text = message } }
+            }
+        }
+        section("ÉTAT ET AUTORISATIONS")
+        card {
+            label("• Association par code temporaire à usage unique", 13f, textColor, true)
+            label("• Connexion sortante vers le relais (pas de port entrant ouvert)", 13f, muted, false)
+            label("• Le transfert Internet et le contrôle d'écran restent à intégrer.", 13f, muted, false)
+        }
+        action("Révoquer la session enregistrée", "Efface le jeton de cet appareil.") {
+            remoteClient?.disconnect()
+            prefs.edit().remove("relay_token").remove("relay_pair_id").remove("relay_base_url").apply()
+            status.text = "Session locale supprimée. Génère un nouveau code pour associer à nouveau."
+        }
+    }
+
     private fun buildSecurityPage() {
         label("SÉCURITÉ", 12f, accent, true)
         label("Contrôle et confidentialité", 23f, textColor, true)
@@ -313,6 +374,8 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         receiver?.stop()
         receiver = null
+        remoteClient?.disconnect()
+        remoteClient = null
         super.onDestroy()
     }
 
