@@ -306,10 +306,9 @@ class MainActivity : Activity() {
             label("• Connexion sortante vers le relais (pas de port entrant ouvert)", 13f, muted, false)
             label("• Le transfert Internet et le contrôle d'écran restent à intégrer.", 13f, muted, false)
         }
-        action("Révoquer la session enregistrée", "Efface le jeton de cet appareil.") {
-            remoteClient?.disconnect()
-            prefs.edit().remove("relay_token").remove("relay_pair_id").remove("relay_base_url").apply()
-            status.text = "Session locale supprimée. Génère un nouveau code pour associer à nouveau."
+        action("Révoquer la session enregistrée", "Révoque l'association sur le serveur si le relais est joignable.") {
+            if (remoteClient == null) remoteClient = RemoteRelayClient(this)
+            remoteClient?.revoke { message -> runOnUiThread { remoteStatusView?.text = message } }
         }
     }
 
