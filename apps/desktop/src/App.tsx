@@ -122,7 +122,7 @@ function App() {
           if (message.type === "authenticated") setRemoteRelayStatus("Relais authentifié — en attente de l’appareil cible");
           if (message.type === "peer_status") {
             if (message.connected && (message.role === "windows" || message.role === "android")) setRemotePeerRole(message.role);
-            if (!message.connected && message.role === remotePeerRole) setRemotePeerRole(null);
+            if (!message.connected && (message.role === "windows" || message.role === "android")) setRemotePeerRole(null);
             setRemoteRelayStatus(message.connected ? (message.role === "windows" ? "Agent Windows connecté" : message.role === "android" ? "Agent Android connecté" : "Contrôleur connecté") : "En attente de l’appareil cible");
           }
           if (message.type === "command_result") {
