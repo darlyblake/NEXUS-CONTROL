@@ -338,6 +338,12 @@ class MainActivity : Activity() {
             label("Android " + Build.VERSION.RELEASE + " • API " + Build.VERSION.SDK_INT, 13f, muted, false)
             label("Adresse IP : " + localIp(), 13f, muted, false)
         }
+        action("Autoriser la localisation", "Accorde la permission pendant que l'application est ouverte pour permettre les demandes de position à distance.") {
+            val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fine || coarse) dialog("Localisation", "Une permission de localisation est déjà accordée.")
+            else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 3101)
+        }
         action("Autoriser la capture d'écran", "Android demande confirmation ; le flux distant n'est pas encore intégré.") {
             val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             @Suppress("DEPRECATION")
