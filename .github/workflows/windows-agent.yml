@@ -65,6 +65,23 @@ jobs:
             }
           }
 
+      - name: Validate companion PowerShell installer syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'apps/windows/installer/Install-NexusAgent.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | Format-List; throw 'Installer syntax errors' }
+
+      - name: Restore companion
+        run: dotnet restore apps/windows/NexusCompanion/NexusCompanion.csproj
+
+      - name: Build companion
+        run: dotnet build apps/windows/NexusCompanion/NexusCompanion.csproj --configuration Release --no-restore
+
+      - name: Publish self-contained Windows x64 companion
+        run: dotnet publish apps/windows/NexusCompanion/NexusCompanion.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/windows-agent/companion
+
       - name: Restore
         run: dotnet restore apps/windows/NexusAgent/NexusAgent.csproj
 
