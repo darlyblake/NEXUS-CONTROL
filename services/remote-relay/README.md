@@ -31,7 +31,7 @@ Les jetons sont secrets : ne pas les mettre dans une URL, un journal, une captur
 
 ## Limites importantes de cette première version
 
-- Les codes, jetons et associations sont conservés **en mémoire**. Un redémarrage du service invalide les sessions et les jetons ; ce stockage doit être remplacé par une base persistante avant une utilisation durable.
+- Les codes, jetons et associations sont conservés **en mémoire**. Un redémarrage du service invalide les sessions et les jetons ; ce stockage doit être remplacé par une base persistante avant une utilisation durable. Les jetons expirent après 12 heures et peuvent être révoqués avec `POST /api/revoke`.
 - Les routes de création d'association sont limitées par adresse IP, mais l'hébergement doit aussi appliquer une limitation de débit et des protections contre les abus.
 - Le relais ne chiffre pas le contenu au niveau applicatif de bout en bout : TLS protège le transport entre chaque client et le relais. Pour les fichiers sensibles, ajouter un chiffrement de bout en bout avec des clés échangées et vérifiées pendant l'association.
 - Aucun client n'est encore connecté à ce service. Tant que l'intégration Android et desktop n'est pas faite et que le relais n'est pas déployé, aucune session distante réelle ne peut être établie.
