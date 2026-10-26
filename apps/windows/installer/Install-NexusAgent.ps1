@@ -17,7 +17,7 @@ $configPath = Join-Path $configDirectory 'agent.json'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Ouvre PowerShell en tant qu’administrateur pour installer le service.'
+    throw 'Ouvre PowerShell en tant qu-administrateur pour installer le service.'
 }
 
 $source = (Resolve-Path -LiteralPath $PublishDirectory).Path
@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
 Write-Host ''
 Write-Host 'NEXUS CONTROL Agent Windows' -ForegroundColor Cyan
 Write-Host 'Cet agent fonctionnera comme service Windows et se reconnectera au relais configuré.'
-Write-Host 'Le code d’association autorise ce PC à rejoindre une session NEXUS CONTROL.'
+Write-Host 'Le code d-association autorise ce PC à rejoindre une session NEXUS CONTROL.'
 $consent = Read-Host 'Confirme que tu es autorisé à administrer ce PC et que tu veux associer cet appareil (tape OUI)'
 if ($consent -cne 'OUI') { throw 'Installation annulée : consentement local non confirmé.' }
 
@@ -40,16 +40,16 @@ if ($relayUri.Scheme -ne 'https' -or -not $relayUri.Host) {
 }
 $RelayUrl = $RelayUrl.TrimEnd('/')
 
-if (-not $PairCode) { $PairCode = Read-Host 'Code d’association affiché dans NEXUS CONTROL (valide 5 minutes)' }
+if (-not $PairCode) { $PairCode = Read-Host 'Code d-association affiché dans NEXUS CONTROL (valide 5 minutes)' }
 $PairCode = $PairCode.Trim().ToUpperInvariant()
-if ($PairCode -notmatch '^[A-HJ-NP-Z2-9]{10}$') { throw 'Format de code d’association invalide.' }
+if ($PairCode -notmatch '^[A-HJ-NP-Z2-9]{10}$') { throw 'Format de code d-association invalide.' }
 
 if (-not $EnableRemoteShell) {
     $shellConsent = Read-Host 'Autoriser les commandes PowerShell distantes (risque élevé, exécutées avec les droits du service) ? Tape ACTIVER pour accepter, sinon appuie sur Entrée'
     if ($shellConsent -ceq 'ACTIVER') { $EnableRemoteShell = $true }
 }
 if ($EnableRemoteShell) {
-    Write-Warning 'PowerShell distant activé : les scripts seront exécutés avec l’identité du service Windows, généralement SYSTEM. N’active cette option que pour ton propre appareil.'
+    Write-Warning 'PowerShell distant activé : les scripts seront exécutés avec l-identité du service Windows, généralement SYSTEM. N-active cette option que pour ton propre appareil.'
 }
 
 Write-Host "Source : $source"
@@ -67,10 +67,10 @@ $pairBody = @{
 try {
     $pair = Invoke-RestMethod -Method Post -Uri ($RelayUrl + '/api/pair/redeem') -ContentType 'application/json' -Body $pairBody -TimeoutSec 15
 } catch {
-    throw "Association refusée. Vérifie l’URL, le code, son expiration et la connexion HTTPS. Détail : $($_.Exception.Message)"
+    throw "Association refusée. Vérifie l-URL, le code, son expiration et la connexion HTTPS. Détail : $($_.Exception.Message)"
 }
 if (-not $pair.deviceToken -or -not $pair.pairId) {
-    throw 'Le relais n’a pas renvoyé les informations attendues ; le service ne sera pas installé.'
+    throw 'Le relais n-a pas renvoyé les informations attendues ; le service ne sera pas installé.'
 }
 
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
@@ -119,4 +119,4 @@ Start-Service -Name $serviceName
 Get-Service -Name $serviceName | Format-Table Name, Status, StartType
 Write-Host "Appareil associé : $deviceId"
 Write-Host "PowerShell distant : $EnableRemoteShell"
-Write-Host 'Le service n’ouvre aucun port entrant. Il se connecte au relais en sortie via WSS.'
+Write-Host 'Le service n-ouvre aucun port entrant. Il se connecte au relais en sortie via WSS.'
