@@ -4,12 +4,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <application android:allowBackup="false" android:label="NEXUS CONTROL" android:icon="@drawable/ic_nexus_launcher" android:roundIcon="@drawable/ic_nexus_launcher" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="true">
+        <receiver android:name=".NexusDeviceAdminReceiver" android:label="NEXUS CONTROL - administration" android:description="@string/device_admin_description" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin_policies" />
+            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+        </receiver>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
