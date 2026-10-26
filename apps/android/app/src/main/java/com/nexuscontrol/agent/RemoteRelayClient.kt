@@ -76,7 +76,8 @@ class RemoteRelayClient(private val context: Context) {
             onStatus("Connexion au relais impossible : " + (error.message ?: error.javaClass.simpleName))
         }
     }
-\n    private fun connect(baseUrl: String, deviceId: String, token: String, onStatus: (String) -> Unit) {
+
+    private fun connect(baseUrl: String, deviceId: String, token: String, onStatus: (String) -> Unit) {
         val parsed = java.net.URI(baseUrl)
         val scheme = if (parsed.scheme == "https") "wss" else "ws"
         val authority = parsed.rawAuthority
@@ -96,7 +97,7 @@ class RemoteRelayClient(private val context: Context) {
                         "peer_status" -> onStatus(if (message.optBoolean("connected")) "PC et téléphone sont connectés au relais." else "Relais connecté ; en attente du PC.")
                         "command" -> {
                             val action = message.optString("action")
-                            if (action in setOf("location_request", "ring_start", "ring_stop", "show_message")) {
+                            if (action in setOf("location_request", "ring_start", "ring_stop", "show_message", "device_info", "installed_apps")) {
                                 commandHandler?.invoke(message)
                             } else {
                                 onStatus("Commande refusée : action inconnue.")

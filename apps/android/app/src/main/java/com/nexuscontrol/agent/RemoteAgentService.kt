@@ -9,6 +9,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.location.LocationManager
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -77,6 +78,8 @@ class RemoteAgentService : Service() {
         val commandId = message.optString("commandId").ifBlank { UUID.randomUUID().toString() }
         when (action) {
             "location_request" -> sendLastKnownLocation(commandId)
+            "device_info" -> sendDeviceInfo(commandId)
+            "installed_apps" -> sendInstalledApps(commandId)
             "ring_start" -> {
                 try {
                     val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
@@ -138,6 +141,44 @@ class RemoteAgentService : Service() {
             client?.sendMessage(payload)
         } catch (e: Exception) {
             sendResult(commandId, "location_request", false, "Lecture de la position impossible : " + (e.message ?: "erreur"))
+        }
+    }
+
+    private fun sendDeviceInfo(commandId: String) {
+        val info = JSONObject()
+            .put("manufacturer", Build.MANUFACTURER)
+            .put("brand", Build.BRAND)
+            .put("model", Build.MODEL)
+            .put("device", Build.DEVICE)
+            .put("androidVersion", Build.VERSION.RELEASE)
+            .put("sdkInt", Build.VERSION.SDK_INT)
+            .put("appVersion", try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: "inconnue"
+            } catch (_: Exception) { "inconnue" })
+        sendResult(commandId, "device_info", true, info.toString())
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sendInstalledApps(commandId: String) {
+        try {
+            // Android peut limiter les paquets visibles. Retourne les applications non système visibles, avec un plafond.
+            val apps = packageManager.getInstalledApplications(0)
+                .asSequence()
+                .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
+                .take(80)
+                .map { app ->
+                    JSONObject()
+                        .put("packageName", app.packageName)
+                        .put("label", packageManager.getApplicationLabel(app).toString().take(100))
+                }
+                .toList()
+            val payload = JSONObject()
+                .put("count", apps.size)
+                .put("limited", apps.size >= 80)
+                .put("apps", org.json.JSONArray(apps))
+            sendResult(commandId, "installed_apps", true, payload.toString().take(12_000))
+        } catch (e: Exception) {
+            sendResult(commandId, "installed_apps", false, "Lecture des applications impossible : " + (e.message ?: "erreur"))
         }
     }
 
