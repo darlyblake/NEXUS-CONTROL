@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "./screen-share.css";
 import { Monitor, Pause, Play, ShieldCheck } from "lucide-react";
 
 type ScreenSharePanelProps = {
