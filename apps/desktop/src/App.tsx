@@ -65,6 +65,7 @@ function App() {
   const [fileLocalPath, setFileLocalPath] = useState("");
   const [filePcDestination, setFilePcDestination] = useState("");
   const [fileAndroidPath, setFileAndroidPath] = useState("/sdcard/Download/");
+  const [fileAndroidSource, setFileAndroidSource] = useState("/sdcard/Download/document.pdf");
   const [fileBusy, setFileBusy] = useState(false);
   const [runtime, setRuntime] = useState(isDesktopRuntime());
   const [notice, setNotice] = useState("Bienvenue dans NEXUS CONTROL. Les connecteurs ne sont pas encore configurés.");
@@ -413,15 +414,15 @@ function App() {
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>Récupérer un fichier depuis Android</h3><p>Indique un chemin de fichier existant sur Android et le chemin de destination sur le PC.</p></div><FileDown size={19}/></div>
               <label className="remote-field-label" htmlFor="nexus-android-source">Fichier Android (chemin absolu)</label>
-              <input id="nexus-android-source" className="remote-server-input" placeholder="/sdcard/Download/document.pdf" value={fileAndroidPath} onChange={e => setFileAndroidPath(e.target.value)}/>
+              <input id="nexus-android-source" className="remote-server-input" placeholder="/sdcard/Download/document.pdf" value={fileAndroidSource} onChange={e => setFileAndroidSource(e.target.value)}/>
               <label className="remote-field-label" htmlFor="nexus-local-destination">Enregistrer sur le PC (chemin absolu)</label>
               <input id="nexus-local-destination" className="remote-server-input" placeholder="/home/utilisateur/Téléchargements/document.pdf" value={filePcDestination} onChange={e => setFilePcDestination(e.target.value)}/>
-              <div className="heading-actions remote-actions"><button className="button button-secondary" disabled={fileBusy || !filePcDestination.trim() || !fileAndroidPath.trim() || !android.some(d => d.state === "device")} onClick={() => {
+              <div className="heading-actions remote-actions"><button className="button button-secondary" disabled={fileBusy || !filePcDestination.trim() || !fileAndroidSource.trim() || !android.some(d => d.state === "device")} onClick={() => {
                 const select = document.getElementById("file-android-device") as HTMLSelectElement | null;
                 const serial = select?.value || android.find(d => d.state === "device")?.id;
                 if (!serial) { setNotice("Aucun appareil Android autorisé."); return; }
                 setFileBusy(true);
-                void invoke<string>("adb_pull_file", { serial, remotePath: fileAndroidPath.trim(), localPath: filePcDestination.trim() })
+                void invoke<string>("adb_pull_file", { serial, remotePath: fileAndroidSource.trim(), localPath: filePcDestination.trim() })
                   .then(setNotice).catch(error => setNotice("Récupération échouée : " + String(error))).finally(() => setFileBusy(false));
               }}><FileDown size={16}/>{fileBusy ? "Transfert en cours…" : "Récupérer sur le PC"}</button></div>
               <div className="info-banner"><CircleHelp size={17}/><div><strong>Limite de cette première étape</strong><p>Le transfert fonctionne seulement avec ADB autorisé via USB ou ADB réseau déjà configuré. L'accès à distance par Internet nécessitera un agent/serveur sécurisé ; ne publie jamais le port ADB sur Internet.</p></div></div>
