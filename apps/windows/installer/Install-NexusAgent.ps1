@@ -127,7 +127,7 @@ $companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystem
 $companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, 'FullControl', 'Allow')))
 $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 $companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($userSid, 'Read', 'Allow')))
-Set-Acl -LiteralPath $companionConfigPath -AclObject $companionAcl)
+Set-Acl -LiteralPath $companionConfigPath -AclObject $companionAcl
 
 $installedExecutable = Join-Path $installDirectory 'NexusAgent.exe'
 if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
