@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
@@ -76,8 +76,54 @@ function App() {
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [remoteServerUrl, setRemoteServerUrl] = useState(() => { try { return localStorage.getItem("nexus.remoteServerUrl") || ""; } catch { return ""; } });
   const [openingRemoteConsole, setOpeningRemoteConsole] = useState(false);
+  const [remoteRelayUrl, setRemoteRelayUrl] = useState("");
+  const [remotePairCode, setRemotePairCode] = useState("");
+  const [remoteRelayStatus, setRemoteRelayStatus] = useState("Non connecté");
+  const [remoteDeviceId] = useState(() => "pc-" + (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
+  const remoteSocketRef = useRef<WebSocket | null>(null);
   const [auditChecks, setAuditChecks] = useState<AuditCheck[]>([]);
   const [runningAudit, setRunningAudit] = useState(false);
+
+  const createRemotePair = useCallback(async () => {
+    const base = remoteRelayUrl.trim().replace(/\/$/, "");
+    let parsed: URL;
+    try { parsed = new URL(base); } catch { setNotice("Adresse du relais invalide."); return; }
+    if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+      setNotice("Le relais distant doit utiliser HTTPS/WSS. HTTP n'est permis que pour un test local.");
+      return;
+    }
+    setOpeningRemoteConsole(true);
+    setRemoteRelayStatus("Création de l'association…");
+    setRemotePairCode("");
+    remoteSocketRef.current?.close();
+    try {
+      const response = await fetch(base + "/api/pair", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ deviceId: remoteDeviceId }) });
+      const data = await response.json() as { pairCode?: string; pairId?: string; desktopToken?: string; error?: string; message?: string };
+      if (!response.ok || !data.pairCode || !data.pairId || !data.desktopToken) throw new Error(data.message || data.error || "Le relais a refusé la demande.");
+      setRemotePairCode(data.pairCode);
+      const socketUrl = new URL(base);
+      socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+      socketUrl.pathname = "/ws"; socketUrl.search = ""; socketUrl.hash = "";
+      const socket = new WebSocket(socketUrl.toString());
+      remoteSocketRef.current = socket;
+      socket.onopen = () => socket.send(JSON.stringify({ type: "auth", deviceId: remoteDeviceId, token: data.desktopToken }));
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(String(event.data)) as { type?: string; role?: string; connected?: boolean };
+          if (message.type === "authenticated") setRemoteRelayStatus("Relais connecté — en attente du téléphone");
+          if (message.type === "peer_status") setRemoteRelayStatus(message.connected ? "Téléphone connecté" : "En attente du téléphone");
+        } catch { /* ignore les messages de statut non JSON */ }
+      };
+      socket.onerror = () => setRemoteRelayStatus("Erreur de connexion au relais");
+      socket.onclose = () => setRemoteRelayStatus("Déconnecté du relais");
+      setNotice("Code d'association créé. Saisis-le dans NEXUS Agent sur le téléphone avant son expiration.");
+    } catch (error) {
+      setRemoteRelayStatus("Association indisponible");
+      setNotice("Impossible de joindre le relais : " + String(error));
+    } finally { setOpeningRemoteConsole(false); }
+  }, [remoteRelayUrl, remoteDeviceId]);
+
+  useEffect(() => () => { remoteSocketRef.current?.close(); }, []);
 
   const refreshLocal = useCallback(async () => {
     if (!isDesktopRuntime()) {
@@ -448,6 +494,15 @@ function App() {
             <div className="network-hero">
               <div className="network-hero-icon"><Link2 size={25}/></div>
               <div className="network-hero-copy"><h2>Connecter tous tes appareils</h2><p>NEXUS CONTROL vise les connexions PC ↔ PC, PC ↔ Android, PC ↔ iPhone/iPad et les connexions mobiles compatibles. Le contrôleur et l’appareil distant peuvent être de types différents ; les fonctions disponibles dépendent du système et des autorisations. Configure ici le serveur sécurisé pour les appareils compatibles. Aucun port entrant n’est ouvert sur cet ordinateur.</p></div>
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Relier le téléphone par Internet</h3><p>Association temporaire entre ce PC et NEXUS Agent, même si les appareils ne partagent pas le Wi-Fi.</p></div><span className="count-pill">MVP</span></div>
+              <label className="remote-field-label" htmlFor="nexus-relay-url">URL HTTPS du relais NEXUS</label>
+              <input id="nexus-relay-url" className="remote-server-input" type="url" placeholder="https://relais.ton-domaine.tld" value={remoteRelayUrl} onChange={event => setRemoteRelayUrl(event.target.value)} />
+              <div className="heading-actions remote-actions"><button className="button button-primary" disabled={!remoteRelayUrl.trim() || openingRemoteConsole} onClick={() => void createRemotePair()}><Link2 size={16}/>{openingRemoteConsole ? "Connexion…" : "Créer un code d'association"}</button></div>
+              {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur le téléphone dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
+              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
+              <div className="info-banner"><ShieldCheck size={17}/><div><strong>Fonction en cours d'intégration</strong><p>Ce panneau crée un code et ouvre la connexion au relais. Le relais doit d'abord être déployé en HTTPS/WSS. Le canal transporte des messages, mais le transfert de fichiers et le contrôle d'écran ne sont pas encore branchés à ce canal.</p></div></div>
             </div>
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>Serveur distant</h3><p>Adresse publique de ta console, par exemple https://controle.ton-domaine.tld</p></div><span className="count-pill">HTTPS requis</span></div>
