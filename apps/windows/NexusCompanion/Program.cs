@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text;
 using Microsoft.Win32;
 using System.Windows.Forms;
 
@@ -305,7 +306,7 @@ internal sealed class ControlStatusForm : Form
 
     public void SetState(string text, bool active)
     {
-        if (InvokeRequired) { BeginInvoke(() => SetState(text, active)); return; }
+        if (InvokeRequired) { BeginInvoke(new Action(() => SetState(text, active))); return; }
         _label.Text = text;
         BackColor = active ? Color.MistyRose : SystemColors.Control;
         _stop.Enabled = active;
@@ -335,7 +336,7 @@ internal static class InputNative
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
     private static void Send(params INPUT[] inputs)
     {
-        if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) != inputs.Length)
+        if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) != (uint)inputs.Length)
             throw new InvalidOperationException("Windows a refusé l’événement d’entrée (droits ou session protégée).");
     }
 
