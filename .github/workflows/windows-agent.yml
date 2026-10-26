@@ -11,6 +11,8 @@ on:
   pull_request:
     paths:
       - "apps/windows/**"
+      - "apps/desktop/src/**"
+      - "services/remote-relay/**"
       - ".github/workflows/windows-agent.yml"
   workflow_dispatch:
 
@@ -48,6 +50,20 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      - name: Validate PowerShell installer syntax
+        shell: pwsh
+        run: |
+          $files = @('apps/windows/installer/Install-NexusAgent.ps1', 'apps/windows/installer/Uninstall-NexusAgent.ps1')
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | Format-List
+              throw "PowerShell syntax errors in $file"
+            }
+          }
 
       - name: Restore
         run: dotnet restore apps/windows/NexusAgent/NexusAgent.csproj
