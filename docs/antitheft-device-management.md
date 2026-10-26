@@ -4,6 +4,16 @@
 
 La page **Protection antivol** du bureau est une interface de préparation. Elle n'envoie pas encore de commandes de localisation, de sonnerie ou de message à un agent Android distant. Le relais expérimental actuel ne doit pas être présenté comme un service de gestion antivol opérationnel.
 
+## État de la première intégration (octobre 2026)
+
+Le bureau et l'agent Android disposent maintenant d'un premier protocole de commandes via le relais :
+- demande de la dernière position connue (permission de localisation Android requise) ;
+- démarrage et arrêt de la sonnerie ;
+- affichage d'un message dans l'application Android ouverte ;
+- validation côté relais du rôle émetteur, de l'action autorisée, de l'identifiant et de l'horodatage de commande.
+
+Ce n'est pas encore un système antivol complet. L'agent doit rester actif et connecté au WebSocket ; la livraison en arrière-plan n'est pas garantie. La localisation n'obtient pas nécessairement un nouveau relevé GPS. Le message n'est pas garanti sur l'écran verrouillé. Le mode Device Owner, les notifications persistantes, l'historique côté serveur et les tests sur un appareil réel restent à faire. Le workflow CI compile l'APK Android ; cela ne remplace pas un test pratique sur téléphone.
+
 ## Architecture cible
 
 1. **Agent Android explicite** : application visible, permissions demandées dans le contexte, état de consentement et indicateurs compréhensibles.
