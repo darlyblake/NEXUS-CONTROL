@@ -78,7 +78,7 @@ Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il f
 
 Pour compiler sur Ubuntu, consulte [le guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
 
-**Important :** cette première version n'établit pas encore de session de contrôle distante et ne transfère pas les fichiers sur le réseau. L'association locale d'un appareil n'est pas une authentification serveur. Le relais inter-réseaux, le protocole chiffré et l'intégration avec le client desktop restent à implémenter avant tout usage réel. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
+**Important :** le relais distant expérimental et les premières interfaces d'association sont ajoutés, mais cela ne constitue pas encore une session de contrôle complète. Le transfert de fichiers via Internet, les commandes distantes et le flux d'écran restent à implémenter. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
 
 
 ## Agent Android (NEXUS Agent)
@@ -87,7 +87,7 @@ Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il f
 
 Pour compiler sur Ubuntu, consulte le [guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
 
-**Important :** cette première version n'établit pas encore de session de contrôle distante et ne transfère pas les fichiers sur le réseau. L'association locale d'un appareil n'est pas une authentification serveur. Le relais inter-réseaux, le protocole chiffré et l'intégration avec le client desktop restent à implémenter avant tout usage réel. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
+**Important :** le relais distant expérimental et les premières interfaces d'association sont ajoutés, mais cela ne constitue pas encore une session de contrôle complète. Le transfert de fichiers via Internet, les commandes distantes et le flux d'écran restent à implémenter. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
 
 
 ## Relais distant expérimental
