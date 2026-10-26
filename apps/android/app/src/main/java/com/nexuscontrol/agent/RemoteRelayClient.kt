@@ -19,6 +19,11 @@ class RemoteRelayClient(context: Context) {
         .pingInterval(25, TimeUnit.SECONDS)
         .build()
     @Volatile private var socket: WebSocket? = null
+    @Volatile private var commandHandler: ((JSONObject) -> Unit)? = null
+
+    fun setCommandHandler(handler: (JSONObject) -> Unit) { commandHandler = handler }
+
+    fun sendMessage(message: JSONObject): Boolean = socket?.send(message.toString()) == true
 
     fun pairAndConnect(baseUrl: String, pairCode: String, deviceId: String, onStatus: (String) -> Unit) {
         Thread {
@@ -67,6 +72,14 @@ class RemoteRelayClient(context: Context) {
                     when (message.optString("type")) {
                         "authenticated" -> onStatus("Téléphone authentifié auprès du relais.")
                         "peer_status" -> onStatus(if (message.optBoolean("connected")) "PC et téléphone sont connectés au relais." else "Relais connecté ; en attente du PC.")
+                        "command" -> {
+                            val action = message.optString("action")
+                            if (action in setOf("location_request", "ring_start", "ring_stop", "show_message")) {
+                                commandHandler?.invoke(message)
+                            } else {
+                                onStatus("Commande refusée : action inconnue.")
+                            }
+                        }
                     }
                 } catch (_: Exception) { onStatus("Message reçu du relais.") }
             }

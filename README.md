@@ -63,6 +63,8 @@ npm run tauri dev
 
 Ne pas exposer ADB, les terminaux ni les interfaces d'administration directement sur Internet. Le contrôle Android requiert l'autorisation explicite du téléphone. Voir [Sécurité](docs/security.md).
 
+Le panneau **Protection antivol** présente la feuille de route de gestion Android. Les commandes à distance restent à développer ; voir [Protection antivol et administration Android](docs/antitheft-device-management.md) pour le mode Device Owner, les limites et les tests de sécurité.
+
 ## Validation continue
 
 Un workflow GitHub Actions vérifie le build frontend et la compilation Rust sur Ubuntu.

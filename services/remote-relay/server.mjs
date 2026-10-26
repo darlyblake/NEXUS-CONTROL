@@ -248,6 +248,20 @@ wss.on("connection", (ws) => {
       let message;
       try { message = JSON.parse(data.toString("utf8")); } catch { return ws.close(4400, "invalid_message"); }
       if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
+      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message"]);
+      if (message.type === "command") {
+        if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
+            typeof message.commandId !== "string" || message.commandId.length > 100 ||
+            typeof message.timestamp !== "number" || Math.abs(Date.now() - message.timestamp) > 60_000 ||
+            (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240))) {
+          return ws.close(4403, "invalid_or_unauthorized_command");
+        }
+      } else if (message.type === "command_result") {
+        if (identity.role !== "android" || !allowedActions.has(message.action) ||
+            typeof message.commandId !== "string" || message.commandId.length > 100) {
+          return ws.close(4403, "invalid_or_unauthorized_result");
+        }
+      }
       other.send(data, { binary: false });
     }
   });

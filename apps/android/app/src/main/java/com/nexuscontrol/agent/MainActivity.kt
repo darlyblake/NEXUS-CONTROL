@@ -10,6 +10,11 @@ import android.os.Bundle
 import android.provider.Settings
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.location.LocationManager
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.Manifest
+import org.json.JSONObject
 import android.content.ClipboardManager
 import android.content.ClipData
 import android.database.Cursor
@@ -40,6 +45,8 @@ class MainActivity : Activity() {
     private var receiver: LocalTransferServer? = null
     private var remoteClient: RemoteRelayClient? = null
     private var remoteStatusView: TextView? = null
+    private var activeRingtone: Ringtone? = null
+    private var pendingLocationCommandId: String? = null
     private var receiverToken: String = UUID.randomUUID().toString().replace("-", "")
     private val prefs by lazy { getSharedPreferences("nexus_agent", Context.MODE_PRIVATE) }
 
@@ -58,6 +65,99 @@ class MainActivity : Activity() {
             selectedFileName = selectedFile?.let { displayName(it) } ?: ""
             if (::transferStatus.isInitialized) transferStatus.text = if (selectedFile != null) "Fichier choisi : " + selectedFileName else "Aucun fichier choisi."
         }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 3101) {
+            val commandId = pendingLocationCommandId
+            pendingLocationCommandId = null
+            if (commandId != null) {
+                if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) sendLastKnownLocation(commandId)
+                else sendCommandResult(commandId, "location_request", false, "Autorisation de localisation refusée.")
+            }
+        }
+    }
+
+    private fun configureRemoteClient(): RemoteRelayClient {
+        if (remoteClient == null) remoteClient = RemoteRelayClient(this)
+        val client = remoteClient!!
+        client.setCommandHandler { message -> runOnUiThread { handleRemoteCommand(message) } }
+        return client
+    }
+
+    private fun handleRemoteCommand(message: JSONObject) {
+        val action = message.optString("action")
+        val commandId = message.optString("commandId").ifBlank { UUID.randomUUID().toString() }
+        when (action) {
+            "location_request" -> {
+                val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                val coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                if (!fine && !coarse) {
+                    pendingLocationCommandId = commandId
+                    requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 3101)
+                } else sendLastKnownLocation(commandId)
+            }
+            "ring_start" -> {
+                try {
+                    val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    activeRingtone?.stop()
+                    activeRingtone = RingtoneManager.getRingtone(this, uri)
+                    activeRingtone?.play()
+                    sendCommandResult(commandId, action, true, "Sonnerie démarrée. Arrêt possible depuis l'application.")
+                } catch (error: Exception) {
+                    sendCommandResult(commandId, action, false, "Impossible de démarrer la sonnerie : " + (error.message ?: "erreur"))
+                }
+            }
+            "ring_stop" -> {
+                activeRingtone?.stop()
+                activeRingtone = null
+                sendCommandResult(commandId, action, true, "Sonnerie arrêtée.")
+            }
+            "show_message" -> {
+                val text = message.optString("message").trim().take(240)
+                if (text.isBlank()) sendCommandResult(commandId, action, false, "Message vide.")
+                else {
+                    dialog("Message du propriétaire", text)
+                    sendCommandResult(commandId, action, true, "Message affiché dans l'application ouverte.")
+                }
+            }
+        }
+    }
+
+    @Suppress("MissingPermission")
+    private fun sendLastKnownLocation(commandId: String) {
+        val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            sendCommandResult(commandId, "location_request", false, "Autorisation de localisation absente.")
+            return
+        }
+        try {
+            val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+            val location = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+                .filter { manager.isProviderEnabled(it) }
+                .mapNotNull { provider -> try { manager.getLastKnownLocation(provider) } catch (_: SecurityException) { null } }
+                .maxByOrNull { it.time }
+            if (location == null) {
+                sendCommandResult(commandId, "location_request", false, "Aucune position connue disponible. Active le GPS et réessaie.")
+                return
+            }
+            val payload = JSONObject()
+                .put("type", "command_result").put("commandId", commandId).put("action", "location_request")
+                .put("ok", true).put("latitude", location.latitude).put("longitude", location.longitude)
+                .put("accuracyMeters", location.accuracy.toDouble()).put("locationTime", location.time)
+                .put("provider", location.provider ?: "unknown")
+            configureRemoteClient().sendMessage(payload)
+        } catch (error: Exception) {
+            sendCommandResult(commandId, "location_request", false, "Lecture de la position impossible : " + (error.message ?: "erreur"))
+        }
+    }
+
+    private fun sendCommandResult(commandId: String, action: String, ok: Boolean, detail: String) {
+        configureRemoteClient().sendMessage(JSONObject().put("type", "command_result").put("commandId", commandId)
+            .put("action", action).put("ok", ok).put("detail", detail).put("timestamp", System.currentTimeMillis()))
     }
 
     private fun buildUi() = showPage("home")
@@ -238,6 +338,12 @@ class MainActivity : Activity() {
             label("Android " + Build.VERSION.RELEASE + " • API " + Build.VERSION.SDK_INT, 13f, muted, false)
             label("Adresse IP : " + localIp(), 13f, muted, false)
         }
+        action("Autoriser la localisation", "Accorde la permission pendant que l'application est ouverte pour permettre les demandes de position à distance.") {
+            val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fine || coarse) dialog("Localisation", "Une permission de localisation est déjà accordée.")
+            else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 3101)
+        }
         action("Autoriser la capture d'écran", "Android demande confirmation ; le flux distant n'est pas encore intégré.") {
             val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             @Suppress("DEPRECATION")
@@ -296,8 +402,9 @@ class MainActivity : Activity() {
                 val deviceId = prefs.getString("relay_device_id", null) ?: ("android-" + UUID.randomUUID().toString()).also {
                     prefs.edit().putString("relay_device_id", it).apply()
                 }
-                if (remoteClient == null) remoteClient = RemoteRelayClient(this)
-                remoteClient?.pairAndConnect(base, code, deviceId) { message -> runOnUiThread { remoteStatusView?.text = message } }
+                configureRemoteClient().let { client ->
+                    client.pairAndConnect(base, code, deviceId) { message -> runOnUiThread { remoteStatusView?.text = message } }
+                }
             }
         }
         section("ÉTAT ET AUTORISATIONS")
@@ -307,8 +414,9 @@ class MainActivity : Activity() {
             label("• Le transfert Internet et le contrôle d'écran restent à intégrer.", 13f, muted, false)
         }
         action("Révoquer la session enregistrée", "Révoque l'association sur le serveur si le relais est joignable.") {
-            if (remoteClient == null) remoteClient = RemoteRelayClient(this)
-            remoteClient?.revoke { message -> runOnUiThread { remoteStatusView?.text = message } }
+            configureRemoteClient().let { client ->
+                client.revoke { message -> runOnUiThread { remoteStatusView?.text = message } }
+            }
         }
     }
 
