@@ -451,6 +451,11 @@ function App() {
                 <button className="button button-secondary" onClick={() => { setRemoteServerUrl(""); try { localStorage.removeItem("nexus.remoteServerUrl"); } catch { /* stockage facultatif */ } }}>Effacer l'adresse</button>
               </div>
             </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Contrôle d'un téléphone Android</h3><p>Option externe pour tester le contrôle distant et le transfert de fichiers sans attendre le développement du connecteur natif.</p></div><Smartphone size={20}/></div>
+              <p className="remote-description">RustDesk propose un client Android et un client de bureau. Installe-les uniquement depuis les sources officielles, associe les appareils avec un identifiant et un mot de passe, puis accorde manuellement les autorisations Android nécessaires. Les fonctions disponibles dépendent du téléphone et de sa version d'Android.</p>
+              <div className="heading-actions remote-actions"><button className="button button-primary" onClick={() => { setOpeningRemoteConsole(true); void invoke<string>("open_remote_console", { url: "https://rustdesk.com/" }).then(message => setNotice("Site officiel RustDesk ouvert. Installe les clients PC et Android depuis ce site, puis configure une session autorisée.")).catch(error => setNotice(String(error))).finally(() => setOpeningRemoteConsole(false)); }} disabled={openingRemoteConsole}><ArrowUpRight size={16}/>{openingRemoteConsole ? "Ouverture…" : "Ouvrir le site officiel RustDesk"}</button></div>
+            </div>
             <div className="info-banner"><ShieldCheck size={17}/><div><strong>Avant de contrôler un appareil</strong><p>1. Déployer MeshCentral sur un serveur accessible en HTTPS. 2. Installer l'agent officiel sur l'ordinateur distant et approuver son rattachement. 3. Se connecter à la console et limiter les droits aux opérateurs autorisés. 4. Utiliser les fonctions de partage/invitation du serveur lorsqu'un accès temporaire est nécessaire.</p></div></div>
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>État de l'intégration</h3><p>NEXUS CONTROL ne déclare pas une session active sans vérification du serveur.</p></div></div>
