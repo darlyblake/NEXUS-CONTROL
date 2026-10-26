@@ -78,6 +78,7 @@ function App() {
   const [openingRemoteConsole, setOpeningRemoteConsole] = useState(false);
   const [remoteRelayUrl, setRemoteRelayUrl] = useState("");
   const [remotePairCode, setRemotePairCode] = useState("");
+  const [remoteDesktopToken, setRemoteDesktopToken] = useState("");
   const [remoteRelayStatus, setRemoteRelayStatus] = useState("Non connecté");
   const [remoteDeviceId] = useState(() => "pc-" + (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
   const remoteSocketRef = useRef<WebSocket | null>(null);
@@ -101,6 +102,7 @@ function App() {
       const data = await response.json() as { pairCode?: string; pairId?: string; desktopToken?: string; error?: string; message?: string };
       if (!response.ok || !data.pairCode || !data.pairId || !data.desktopToken) throw new Error(data.message || data.error || "Le relais a refusé la demande.");
       setRemotePairCode(data.pairCode);
+      setRemoteDesktopToken(data.desktopToken);
       const socketUrl = new URL(base);
       socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
       socketUrl.pathname = "/ws"; socketUrl.search = ""; socketUrl.hash = "";
@@ -502,6 +504,12 @@ function App() {
               <div className="heading-actions remote-actions"><button className="button button-primary" disabled={!remoteRelayUrl.trim() || openingRemoteConsole} onClick={() => void createRemotePair()}><Link2 size={16}/>{openingRemoteConsole ? "Connexion…" : "Créer un code d'association"}</button></div>
               {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur le téléphone dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
               <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
+              {remoteDesktopToken && <div className="heading-actions remote-actions"><button className="button button-secondary" onClick={() => {
+                const base = remoteRelayUrl.trim().replace(/\/$/, "");
+                void fetch(base + "/api/revoke", { method: "POST", headers: { "authorization": "Bearer " + remoteDesktopToken } })
+                  .then(async response => { if (!response.ok) throw new Error("Le relais n'a pas confirmé la révocation."); setNotice("Association révoquée côté serveur."); setRemoteDesktopToken(""); setRemotePairCode(""); setRemoteRelayStatus("Association révoquée"); remoteSocketRef.current?.close(); remoteSocketRef.current = null; })
+                  .catch(error => setNotice("Révocation impossible : " + String(error)));
+              }}><LockKeyhole size={16}/>Révoquer cette association</button></div>}
               <div className="info-banner"><ShieldCheck size={17}/><div><strong>Fonction en cours d'intégration</strong><p>Ce panneau crée un code et ouvre la connexion au relais. Le relais doit d'abord être déployé en HTTPS/WSS. Le canal transporte des messages, mais le transfert de fichiers et le contrôle d'écran ne sont pas encore branchés à ce canal.</p></div></div>
             </div>
             <div className="panel device-panel">
