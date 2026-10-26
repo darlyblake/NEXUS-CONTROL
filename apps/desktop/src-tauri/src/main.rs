@@ -403,6 +403,78 @@ fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
 }
 
 #[tauri::command]
+fn build_and_install_android() -> Result<String, String> {
+    if !command_exists("adb") {
+        return Err("ADB n'est pas installé ou n'est pas accessible depuis NEXUS CONTROL. Installe Android platform-tools puis réessaie.".to_string());
+    }
+    if !command_exists("gradle") {
+        return Err("Gradle n'est pas accessible depuis NEXUS CONTROL. Installe Gradle 8.9 ou configure son chemin dans le PATH.".to_string());
+    }
+
+    let devices = read_android_devices()?;
+    let device = devices.iter().find(|device| device.state == "device");
+    let device = match device {
+        Some(device) => device,
+        None if devices.iter().any(|device| device.state == "unauthorized") =>
+            return Err("Téléphone détecté, mais non autorisé. Déverrouille-le et accepte la fenêtre « Autoriser le débogage USB », puis réessaie.".to_string()),
+        None if devices.iter().any(|device| device.state == "offline") =>
+            return Err("Le téléphone est détecté mais hors ligne. Vérifie le câble USB, déverrouille le téléphone et réessaie.".to_string()),
+        None => return Err("Aucun téléphone Android autorisé détecté. Branche-le avec un câble de données, active le débogage USB et accepte l'autorisation sur le téléphone.".to_string()),
+    };
+
+    let android_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../android");
+    let android_dir = android_dir.canonicalize().map_err(|error|
+        format!("Impossible de trouver le projet Android local ({}): {error}", android_dir.display())
+    )?;
+    if !android_dir.join("settings.gradle.kts").exists() || !android_dir.join("app/build.gradle.kts").exists() {
+        return Err(format!("Le dossier Android ne contient pas les fichiers Gradle attendus : {}", android_dir.display()));
+    }
+
+    let build = Command::new("gradle")
+        .arg("assembleDebug")
+        .current_dir(&android_dir)
+        .output()
+        .map_err(|error| format!("Impossible de démarrer Gradle : {error}"))?;
+    if !build.status.success() {
+        let stdout = String::from_utf8_lossy(&build.stdout);
+        let stderr = String::from_utf8_lossy(&build.stderr);
+        let details = format!("{}\n{}", stdout.trim(), stderr.trim());
+        let excerpt: String = details.chars().rev().take(4500).collect::<String>().chars().rev().collect();
+        return Err(format!("La compilation Android a échoué. Détails :\n{}", excerpt.trim()));
+    }
+
+    let apk = android_dir.join("app/build/outputs/apk/debug/app-debug.apk");
+    if !apk.is_file() {
+        return Err("Gradle a terminé sans erreur, mais le fichier APK attendu n'a pas été trouvé.".to_string());
+    }
+
+    let install = Command::new("adb")
+        .args(["-s", device.id.as_str(), "install", "-r"])
+        .arg(&apk)
+        .output()
+        .map_err(|error| format!("Impossible de lancer l'installation ADB : {error}"))?;
+    if !install.status.success() {
+        let details = format!("{}\n{}", String::from_utf8_lossy(&install.stdout).trim(), String::from_utf8_lossy(&install.stderr).trim());
+        return Err(format!("L'APK a été compilé, mais son installation a échoué : {}", details.trim()));
+    }
+
+    let launch = Command::new("adb")
+        .args(["-s", device.id.as_str(), "shell", "am", "start", "-n", "com.nexuscontrol.agent/.MainActivity"])
+        .output()
+        .map_err(|error| format!("L'application a été installée, mais son lancement n'a pas pu être demandé : {error}"))?;
+    let launch_message = if launch.status.success() {
+        " L'application a également été ouverte sur le téléphone."
+    } else {
+        " L'installation a réussi ; ouvre NEXUS Agent depuis le menu Android."
+    };
+
+    Ok(format!(
+        "Compilation réussie et NEXUS Agent installé sur {} ({}).{}",
+        device.model, device.id, launch_message
+    ))
+}
+
+#[tauri::command]
 fn launch_scrcpy(serial: String) -> Result<(), String> {
     if serial.trim().is_empty() {
         return Err("Identifiant Android manquant.".to_string());
@@ -771,6 +843,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_local_tools,
             scan_android_devices,
+            build_and_install_android,
             scan_network_devices,
             connect_network_android,
             launch_scrcpy,
