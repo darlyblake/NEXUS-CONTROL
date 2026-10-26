@@ -59,6 +59,7 @@ function App() {
   const [connectingIp, setConnectingIp] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [installingIntegration, setInstallingIntegration] = useState<string | null>(null);
+  const [installingAndroid, setInstallingAndroid] = useState(false);
   const [runtime, setRuntime] = useState(isDesktopRuntime());
   const [notice, setNotice] = useState("Bienvenue dans NEXUS CONTROL. Les connecteurs ne sont pas encore configurés.");
   const [lastCheck, setLastCheck] = useState<string | null>(null);
@@ -180,6 +181,26 @@ function App() {
       setInstallingIntegration(null);
     }
   }, []);
+
+  const buildAndInstallAndroid = useCallback(async () => {
+    if (!isDesktopRuntime()) {
+      setNotice("La compilation et l'installation nécessitent l'application de bureau NEXUS CONTROL.");
+      return;
+    }
+    if (installingAndroid) return;
+    setInstallingAndroid(true);
+    setNotice("Vérification du téléphone Android, compilation de l'APK puis installation…");
+    try {
+      const message = await invoke<string>("build_and_install_android");
+      setNotice(message);
+      await refreshLocal();
+    } catch (error) {
+      setNotice("Compilation / installation impossible : " + String(error));
+      await refreshLocal();
+    } finally {
+      setInstallingAndroid(false);
+    }
+  }, [installingAndroid, refreshLocal]);
 
   const runSecurityAudit = useCallback(async () => {
     if (!isDesktopRuntime()) {
@@ -304,7 +325,7 @@ function App() {
             <div><div className="eyebrow">CENTRE DE CONTRÔLE <span>/</span> {page.toUpperCase()}</div><h1>{title.title}</h1><p>{title.subtitle}</p></div>
             <div className="heading-actions">
               <button className="button button-secondary" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={16} className={checking ? "spin" : ""}/>{checking ? "Vérification…" : "Actualiser"}</button>
-              {page === "devices" && <button className="button button-primary" onClick={() => { setPage("integrations"); setNotice("Configure un connecteur avant d'ajouter un appareil."); }}><Plus size={16}/> Configurer un appareil</button>}
+              {page === "devices" && <><button className="button button-secondary" disabled={installingAndroid} onClick={() => void refreshLocal()}><RefreshCw size={15} className={checking ? "spin" : ""}/> Détecter le téléphone</button><button className="button button-primary" disabled={installingAndroid || !runtime} onClick={() => void buildAndInstallAndroid()}>{installingAndroid ? <><RefreshCw size={15} className="spin"/> Compilation / installation…</> : <><ArrowDownToLine size={16}/> Compiler et installer sur Android</>}</button></>}
             </div>
           </div>
 
@@ -455,7 +476,7 @@ function App() {
           {page === "integrations" && <section className="page-body">
             <div className="integration-grid">
               <ConnectorCard icon={<Monitor size={23}/>} title="MeshCentral" category="Ordinateurs Windows / Linux" description="Installe le serveur local depuis un script adapté à Windows ou Linux, puis démarre sa console de configuration." state={tools.find(t => t.id === "meshcentral")?.installed ? "Installé localement" : "Installation requise"} tone={tools.find(t => t.id === "meshcentral")?.installed ? "good" : "neutral"} actionLabel={installingIntegration === "meshcentral" ? "Préparation…" : "Installer / configurer"} action={() => void installIntegration("meshcentral")}/>
-              <ConnectorCard icon={<Smartphone size={23}/>} title="scrcpy + ADB" category="Android" description="Affichage et contrôle de l'écran via USB ou réseau local autorisé. Le débogage USB doit être approuvé sur le téléphone." state={tools.some(t => t.id === "adb" && t.installed) && tools.some(t => t.id === "scrcpy" && t.installed) ? "Outils détectés" : "Installation requise"} tone={tools.some(t => t.id === "adb" && t.installed) && tools.some(t => t.id === "scrcpy" && t.installed) ? "good" : "neutral"} action={() => void refreshLocal()}/>
+              <ConnectorCard icon={<Smartphone size={23}/>} title="NEXUS Agent Android" category="Compiler et installer" description="Compile l’APK local, l’installe ou le met à jour sur un téléphone connecté et autorisé en USB, puis tente de l’ouvrir." state={android.some(d => d.state === "device") ? "Téléphone prêt" : "Téléphone requis"} tone={android.some(d => d.state === "device") ? "good" : "neutral"} action={() => void buildAndInstallAndroid()} actionLabel={installingAndroid ? "Compilation / installation…" : "Compiler et installer"}/>
               <ConnectorCard icon={<Radar size={23}/>} title="Nmap" category="Découverte réseau" description="Recherche les hôtes du sous-réseau local sans scanner les ports. Le bouton ouvre l'analyse réseau existante." state={tools.find(t => t.id === "nmap")?.installed ? "Outil détecté" : "Non installé"} tone={tools.find(t => t.id === "nmap")?.installed ? "good" : "neutral"} action={() => navigate("network")} actionLabel="Ouvrir l'analyse"/>
               <ConnectorCard icon={<Wifi size={23}/>} title="arp-scan" category="Découverte ARP locale" description="Complète la découverte des appareils sur le réseau local lorsque l'outil et ses permissions sont disponibles." state={tools.find(t => t.id === "arp-scan")?.installed ? "Outil détecté" : "Non installé"} tone={tools.find(t => t.id === "arp-scan")?.installed ? "good" : "neutral"} action={() => navigate("network")} actionLabel="Ouvrir l'analyse"/>
               <ConnectorCard icon={<Activity size={23}/>} title="Wireshark / TShark" category="Diagnostic du trafic" description="Le diagnostic de trafic sera activé après définition d'un périmètre et des permissions de capture. Vérifie d'abord la présence de TShark." state={tools.find(t => t.id === "tshark")?.installed ? "Outil détecté" : "Audit disponible"} tone="neutral" action={() => navigate("security")} actionLabel="Vérifier la présence"/>
