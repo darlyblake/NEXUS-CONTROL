@@ -192,11 +192,11 @@ function App() {
     setNotice("Vérification du téléphone Android, compilation de l'APK puis installation…");
     try {
       const message = await invoke<string>("build_and_install_android");
+      await refreshLocal();
       setNotice(message);
-      await refreshLocal();
     } catch (error) {
-      setNotice("Compilation / installation impossible : " + String(error));
       await refreshLocal();
+      setNotice("Compilation / installation impossible : " + String(error));
     } finally {
       setInstallingAndroid(false);
     }
