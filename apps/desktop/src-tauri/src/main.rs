@@ -407,8 +407,49 @@ fn build_and_install_android() -> Result<String, String> {
     if !command_exists("adb") {
         return Err("ADB n'est pas installé ou n'est pas accessible depuis NEXUS CONTROL. Installe Android platform-tools puis réessaie.".to_string());
     }
-    if !command_exists("gradle") {
-        return Err("Gradle n'est pas accessible depuis NEXUS CONTROL. Installe Gradle 8.9 ou configure son chemin dans le PATH.".to_string());
+    // GUI apps launched from the desktop may not inherit the user's interactive Zsh PATH.
+    // Prefer the known modern Gradle installation before falling back to PATH.
+    let gradle = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join(".local/gradle/gradle-8.9/bin/gradle"))
+        .filter(|path| path.is_file())
+        .or_else(|| {
+            let candidates = [
+                PathBuf::from("/usr/local/gradle/gradle-8.9/bin/gradle"),
+                PathBuf::from("/opt/gradle/gradle-8.9/bin/gradle"),
+            ];
+            candidates.into_iter().find(|path| path.is_file())
+        })
+        .or_else(|| {
+            if command_exists("gradle") {
+                Some(PathBuf::from("gradle"))
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| "Gradle est introuvable. Installe Gradle 8.9 dans ~/.local/gradle/gradle-8.9 ou rends-le accessible dans le PATH.".to_string())?;
+
+    let gradle_version = Command::new(&gradle)
+        .arg("--version")
+        .output()
+        .map_err(|error| format!("Impossible de vérifier Gradle ({}): {error}", gradle.display()))?;
+    let version_text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&gradle_version.stdout),
+        String::from_utf8_lossy(&gradle_version.stderr)
+    );
+    let major_version = version_text
+        .lines()
+        .find_map(|line| {
+            let trimmed = line.trim();
+            trimmed.strip_prefix("Gradle ").and_then(|value| value.split('.').next()).and_then(|value| value.parse::<u32>().ok())
+        });
+    if !gradle_version.status.success() || major_version.unwrap_or(0) < 8 {
+        return Err(format!(
+            "NEXUS CONTROL a trouvé une version de Gradle trop ancienne ({}). Gradle 8.9 est attendu. Chemin utilisé : {}. Vérifie que ~/.local/gradle/gradle-8.9/bin/gradle existe.",
+            major_version.map(|value| value.to_string()).unwrap_or_else(|| "inconnue".to_string()),
+            gradle.display()
+        ));
     }
 
     let devices = read_android_devices()?;
@@ -430,7 +471,7 @@ fn build_and_install_android() -> Result<String, String> {
         return Err(format!("Le dossier Android ne contient pas les fichiers Gradle attendus : {}", android_dir.display()));
     }
 
-    let build = Command::new("gradle")
+    let build = Command::new(&gradle)
         .arg("assembleDebug")
         .current_dir(&android_dir)
         .output()
