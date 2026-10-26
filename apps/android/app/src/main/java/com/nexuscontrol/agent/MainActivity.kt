@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.content.ClipboardManager
+import android.content.ClipData
 import android.database.Cursor
 import android.provider.OpenableColumns
 import java.net.HttpURLConnection
@@ -186,6 +188,13 @@ class MainActivity : Activity() {
                 label("Démarre la réception pour afficher l'adresse et le jeton.", 13f, muted, false)
             }
         }
+        if (receiver?.isRunning == true) {
+            action("Copier l'adresse et le jeton", "Colle-les dans NEXUS CONTROL sur le PC.") {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("NEXUS réception", "http://" + localIp() + ":8765\\n" + receiverToken))
+                dialog("Informations copiées", "L'adresse locale et le jeton sont dans le presse-papiers.")
+            }
+        }
         action(if (receiver?.isRunning == true) "Arrêter la réception" else "Démarrer la réception", "Le serveur n'est actif que lorsque tu l'as démarré.") {
             if (receiver?.isRunning == true) {
                 receiver?.stop()
@@ -194,7 +203,7 @@ class MainActivity : Activity() {
             } else {
                 try {
                     receiver = LocalTransferServer(this, receiverToken) { file ->
-                        runOnUiThread { dialog("Fichier reçu", "Fichier enregistré : " + file.name) }
+                        runOnUiThread { showPage("receive"); dialog("Fichier reçu", "Fichier enregistré : " + file.name) }
                     }.also { it.start() }
                     showPage("receive")
                 } catch (error: Exception) {
