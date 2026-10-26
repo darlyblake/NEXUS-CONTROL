@@ -514,9 +514,21 @@ fn build_and_install_android() -> Result<String, String> {
     fs::write(&local_properties, properties)
         .map_err(|error| format!("Impossible d'écrire le chemin du SDK dans {} : {error}", local_properties.display()))?;
 
-    let build = Command::new(&gradle)
+    let mut build_command = Command::new(&gradle);
+    build_command
         .arg("assembleDebug")
         .current_dir(&android_dir)
+        .env("ANDROID_HOME", &sdk)
+        .env("ANDROID_SDK_ROOT", &sdk);
+    // Android Studio/SDK tools may not be on PATH when launched from the desktop menu.
+    let mut path_entries = vec![sdk.join("platform-tools"), sdk.join("cmdline-tools/latest/bin")];
+    if let Some(existing_path) = std::env::var_os("PATH") {
+        path_entries.extend(std::env::split_paths(&existing_path));
+    }
+    if let Ok(path) = std::env::join_paths(path_entries) {
+        build_command.env("PATH", path);
+    }
+    let build = build_command
         .output()
         .map_err(|error| format!("Impossible de démarrer Gradle : {error}"))?;
     if !build.status.success() {
