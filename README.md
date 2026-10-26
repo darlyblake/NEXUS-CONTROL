@@ -8,7 +8,7 @@ Application de bureau open source pour administrer les appareils personnels depu
 - Tableau de bord et navigation en français.
 - Détection locale des outils ADB, scrcpy, Node.js, MeshCentral CLI et WireGuard.
 - Découverte des appareils Android via `adb devices -l`.
-- Application Android : navigation latérale, pages Envoyer/Réception et icône dédiée.
+- Application Android : barre de navigation inférieure, pages Envoyer/Réception/Appareil/Sécurité et première page Accès distant.
 - Transfert PC → Android par Wi-Fi local : récepteur Android activé manuellement, jeton requis et confirmation de transfert côté PC.
 - Page **Analyse réseau** : découverte d'hôtes du sous-réseau local avec Nmap (`-sn`), arp-scan si disponible, puis ping en secours ; aucun scan de ports n'est lancé par défaut.
 - Page **Sécurité** : bouton d'audit local en lecture seule qui vérifie la présence de Nmap, arp-scan, Netdiscover, TShark, WireGuard et l'état d'UFW sous Linux.
@@ -88,3 +88,8 @@ Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il f
 Pour compiler sur Ubuntu, consulte le [guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
 
 **Important :** cette première version n'établit pas encore de session de contrôle distante et ne transfère pas les fichiers sur le réseau. L'association locale d'un appareil n'est pas une authentification serveur. Le relais inter-réseaux, le protocole chiffré et l'intégration avec le client desktop restent à implémenter avant tout usage réel. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
+
+
+## Relais distant expérimental
+
+Le premier service de relais et les étapes de configuration sont décrits dans [services/remote-relay/README.md](services/remote-relay/README.md). Cette version sert à tester l’association et la présence des clients ; elle ne doit pas être considérée comme un système complet de contrôle distant.
