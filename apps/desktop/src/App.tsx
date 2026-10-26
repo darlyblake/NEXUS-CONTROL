@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check,
+  Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
   HardDrive, LayoutDashboard, Link2, LockKeyhole, Monitor, MonitorSmartphone,
   MoreHorizontal, Network, Plus, Radar, RefreshCw, Search, Settings2, ShieldCheck,
   Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap
 } from "lucide-react";
 
-type Page = "overview" | "devices" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
+type Page = "overview" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
@@ -18,6 +18,7 @@ type UpdateInfo = { currentVersion: string; version: string; downloadUrl: string
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
+  { id: "files", label: "Transfert de fichiers", icon: Folder },
   { id: "remote", label: "Accès distant", icon: Link2 },
   { id: "network", label: "Analyse réseau", icon: Radar },
   { id: "integrations", label: "Intégrations", icon: Network },
@@ -32,6 +33,7 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
+  files: { title: "Transfert de fichiers", subtitle: "Copie des fichiers entre cet ordinateur et un appareil Android connecté par ADB." },
   remote: { title: "Accès distant", subtitle: "Prépare une connexion Internet sécurisée vers un serveur distant autorisé." },
   network: { title: "Analyse réseau", subtitle: "Découvre les appareils qui répondent sur le même réseau local." },
   integrations: { title: "Intégrations", subtitle: "Connecteurs logiciels utilisés par NEXUS CONTROL." },
@@ -60,6 +62,9 @@ function App() {
   const [checking, setChecking] = useState(false);
   const [installingIntegration, setInstallingIntegration] = useState<string | null>(null);
   const [installingAndroid, setInstallingAndroid] = useState(false);
+  const [fileLocalPath, setFileLocalPath] = useState("");
+  const [fileAndroidPath, setFileAndroidPath] = useState("/sdcard/Download/");
+  const [fileBusy, setFileBusy] = useState(false);
   const [runtime, setRuntime] = useState(isDesktopRuntime());
   const [notice, setNotice] = useState("Bienvenue dans NEXUS CONTROL. Les connecteurs ne sont pas encore configurés.");
   const [lastCheck, setLastCheck] = useState<string | null>(null);
@@ -377,6 +382,50 @@ function App() {
             <div className="info-banner"><CircleHelp size={17}/><div><strong>Les autres appareils apparaîtront ici après intégration.</strong><p>Windows/Linux via MeshCentral, Android TV via le connecteur compatible, et Apple selon les capacités de gestion autorisées.</p></div></div>
           </section>}
 
+
+          {page === "files" && <section className="page-body">
+            <div className="network-hero">
+              <div className="network-hero-icon"><Folder size={25}/></div>
+              <div className="network-hero-copy"><h2>Fichiers Android par USB / ADB</h2><p>Transfert réel entre le PC et un téléphone Android autorisé. Le téléphone doit apparaître comme « device » dans Mes appareils. Cette première version utilise ADB et ne fonctionne pas encore à travers Internet.</p></div>
+              <button className="button button-secondary" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={15} className={checking ? "spin" : ""}/> Actualiser</button>
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Appareil cible</h3><p>Sélectionne le téléphone qui recevra ou fournira le fichier.</p></div><span className="count-pill">{android.filter(d => d.state === "device").length} autorisé(s)</span></div>
+              {android.filter(d => d.state === "device").length === 0 ? <EmptyState icon={<Smartphone size={24}/>} title="Aucun téléphone prêt" description="Branche le téléphone avec un câble USB de données, active le débogage USB et accepte la demande d'autorisation Android. Puis actualise." action="Détecter les appareils" onAction={() => void refreshLocal()}/> :
+              <div className="network-filters"><label>Appareil Android<select id="file-android-device" defaultValue={android.find(d => d.state === "device")?.id}>{android.filter(d => d.state === "device").map(d => <option key={d.id} value={d.id}>{d.model} — {d.id}</option>)}</select></label></div>}
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Envoyer un fichier du PC vers Android</h3><p>Saisis le chemin absolu du fichier sur Ubuntu et le dossier de destination sur le téléphone.</p></div><FileUp size={19}/></div>
+              <label className="remote-field-label" htmlFor="nexus-local-file">Fichier sur le PC (chemin absolu)</label>
+              <input id="nexus-local-file" className="remote-server-input" placeholder="/home/utilisateur/Téléchargements/document.pdf" value={fileLocalPath} onChange={e => setFileLocalPath(e.target.value)}/>
+              <label className="remote-field-label" htmlFor="nexus-android-destination">Destination Android</label>
+              <input id="nexus-android-destination" className="remote-server-input" placeholder="/sdcard/Download/" value={fileAndroidPath} onChange={e => setFileAndroidPath(e.target.value)}/>
+              <div className="heading-actions remote-actions"><button className="button button-primary" disabled={fileBusy || !fileLocalPath.trim() || !android.some(d => d.state === "device")} onClick={() => {
+                const select = document.getElementById("file-android-device") as HTMLSelectElement | null;
+                const serial = select?.value || android.find(d => d.state === "device")?.id;
+                if (!serial) { setNotice("Aucun appareil Android autorisé."); return; }
+                setFileBusy(true);
+                void invoke<string>("adb_push_file", { serial, localPath: fileLocalPath.trim(), remotePath: fileAndroidPath.trim() || "/sdcard/Download/" })
+                  .then(setNotice).catch(error => setNotice("Envoi échoué : " + String(error))).finally(() => setFileBusy(false));
+              }}><FileUp size={16}/>{fileBusy ? "Transfert en cours…" : "Envoyer vers Android"}</button></div>
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Récupérer un fichier depuis Android</h3><p>Indique un chemin de fichier existant sur Android et le chemin de destination sur le PC.</p></div><FileDown size={19}/></div>
+              <label className="remote-field-label" htmlFor="nexus-android-source">Fichier Android (chemin absolu)</label>
+              <input id="nexus-android-source" className="remote-server-input" placeholder="/sdcard/Download/document.pdf" value={fileAndroidPath} onChange={e => setFileAndroidPath(e.target.value)}/>
+              <label className="remote-field-label" htmlFor="nexus-local-destination">Enregistrer sur le PC (chemin absolu)</label>
+              <input id="nexus-local-destination" className="remote-server-input" placeholder="/home/utilisateur/Téléchargements/document.pdf" value={fileLocalPath} onChange={e => setFileLocalPath(e.target.value)}/>
+              <div className="heading-actions remote-actions"><button className="button button-secondary" disabled={fileBusy || !fileLocalPath.trim() || !fileAndroidPath.trim() || !android.some(d => d.state === "device")} onClick={() => {
+                const select = document.getElementById("file-android-device") as HTMLSelectElement | null;
+                const serial = select?.value || android.find(d => d.state === "device")?.id;
+                if (!serial) { setNotice("Aucun appareil Android autorisé."); return; }
+                setFileBusy(true);
+                void invoke<string>("adb_pull_file", { serial, remotePath: fileAndroidPath.trim(), localPath: fileLocalPath.trim() })
+                  .then(setNotice).catch(error => setNotice("Récupération échouée : " + String(error))).finally(() => setFileBusy(false));
+              }}><FileDown size={16}/>{fileBusy ? "Transfert en cours…" : "Récupérer sur le PC"}</button></div>
+              <div className="info-banner"><CircleHelp size={17}/><div><strong>Limite de cette première étape</strong><p>Le transfert fonctionne seulement avec ADB autorisé via USB ou ADB réseau déjà configuré. L'accès à distance par Internet nécessitera un agent/serveur sécurisé ; ne publie jamais le port ADB sur Internet.</p></div></div>
+            </div>
+          </section>}
 
           {page === "remote" && <section className="page-body">
             <div className="network-hero">
