@@ -33,8 +33,8 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
-  files: { title: "Transfert de fichiers", subtitle: "Copie des fichiers entre cet ordinateur et un appareil Android connecté par ADB." },
-  remote: { title: "Accès distant", subtitle: "Prépare une connexion Internet sécurisée vers un serveur distant autorisé." },
+  files: { title: "Transfert de fichiers", subtitle: "Échanges de fichiers entre appareils compatibles ; ADB Android est le premier connecteur disponible." },
+  remote: { title: "Accès distant", subtitle: "Connecte un PC, un appareil Android ou un appareil Apple selon les fonctions autorisées par son système." },
   network: { title: "Analyse réseau", subtitle: "Découvre les appareils qui répondent sur le même réseau local." },
   integrations: { title: "Intégrations", subtitle: "Connecteurs logiciels utilisés par NEXUS CONTROL." },
   automations: { title: "Automatisations", subtitle: "Prépare des tâches répétables, avec contrôle et journalisation." },
@@ -432,7 +432,7 @@ function App() {
           {page === "remote" && <section className="page-body">
             <div className="network-hero">
               <div className="network-hero-icon"><Link2 size={25}/></div>
-              <div className="network-hero-copy"><h2>Relier des appareils par Internet</h2><p>Configure l'adresse HTTPS de ton serveur MeshCentral. Les appareils distants doivent y être enregistrés avec un agent autorisé. NEXUS CONTROL n'ouvre aucun port entrant sur cet ordinateur.</p></div>
+              <div className="network-hero-copy"><h2>Connecter tous tes appareils</h2><p>NEXUS CONTROL vise les connexions PC ↔ PC, PC ↔ Android, PC ↔ iPhone/iPad et les connexions mobiles compatibles. Le contrôleur et l’appareil distant peuvent être de types différents ; les fonctions disponibles dépendent du système et des autorisations. Configure ici le serveur sécurisé pour les appareils compatibles. Aucun port entrant n’est ouvert sur cet ordinateur.</p></div>
             </div>
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>Serveur distant</h3><p>Adresse publique de ta console, par exemple https://controle.ton-domaine.tld</p></div><span className="count-pill">HTTPS requis</span></div>
@@ -452,7 +452,7 @@ function App() {
               </div>
             </div>
             <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Contrôle d'un téléphone Android</h3><p>Option externe pour tester le contrôle distant et le transfert de fichiers sans attendre le développement du connecteur natif.</p></div><Smartphone size={20}/></div>
+              <div className="panel-header"><div><h3>Tester une solution multiplateforme</h3><p>RustDesk peut servir à tester certaines connexions entre PC et Android. Pour iPhone/iPad, le partage d’écran et le contrôle sont limités par iOS/iPadOS ; ne pas supposer qu’un contrôle complet est possible.</p></div><Smartphone size={20}/></div>
               <p className="remote-description">RustDesk propose un client Android et un client de bureau. Installe-les uniquement depuis les sources officielles, associe les appareils avec un identifiant et un mot de passe, puis accorde manuellement les autorisations Android nécessaires. Les fonctions disponibles dépendent du téléphone et de sa version d'Android.</p>
               <div className="heading-actions remote-actions"><button className="button button-primary" onClick={() => { setOpeningRemoteConsole(true); void invoke<string>("open_remote_console", { url: "https://rustdesk.com/" }).then(message => setNotice("Site officiel RustDesk ouvert. Installe les clients PC et Android depuis ce site, puis configure une session autorisée.")).catch(error => setNotice(String(error))).finally(() => setOpeningRemoteConsole(false)); }} disabled={openingRemoteConsole}><ArrowUpRight size={16}/>{openingRemoteConsole ? "Ouverture…" : "Ouvrir le site officiel RustDesk"}</button></div>
             </div>
