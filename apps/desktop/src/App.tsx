@@ -82,6 +82,9 @@ function App() {
   const [remotePairCode, setRemotePairCode] = useState("");
   const [remoteDesktopToken, setRemoteDesktopToken] = useState("");
   const [remoteRelayStatus, setRemoteRelayStatus] = useState("Non connecté");
+  const [remoteCommandResult, setRemoteCommandResult] = useState("Aucune commande envoyée.");
+  const [remoteLastLocation, setRemoteLastLocation] = useState<{ latitude: number; longitude: number; accuracyMeters?: number; locationTime?: number; provider?: string } | null>(null);
+  const [remoteMessage, setRemoteMessage] = useState("Téléphone perdu. Merci de contacter son propriétaire.");
   const [remoteDeviceId] = useState(() => "pc-" + (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
   const remoteSocketRef = useRef<WebSocket | null>(null);
   const [auditChecks, setAuditChecks] = useState<AuditCheck[]>([]);
@@ -113,9 +116,15 @@ function App() {
       socket.onopen = () => socket.send(JSON.stringify({ type: "auth", deviceId: remoteDeviceId, token: data.desktopToken }));
       socket.onmessage = (event) => {
         try {
-          const message = JSON.parse(String(event.data)) as { type?: string; role?: string; connected?: boolean };
+          const message = JSON.parse(String(event.data)) as { type?: string; role?: string; connected?: boolean; action?: string; ok?: boolean; detail?: string; latitude?: number; longitude?: number; accuracyMeters?: number; locationTime?: number; provider?: string };
           if (message.type === "authenticated") setRemoteRelayStatus("Relais connecté — en attente du téléphone");
           if (message.type === "peer_status") setRemoteRelayStatus(message.connected ? "Téléphone connecté" : "En attente du téléphone");
+          if (message.type === "command_result") {
+            setRemoteCommandResult((message.action || "Commande") + " : " + (message.ok ? "réussie" : "échec") + (message.detail ? " — " + message.detail : ""));
+            if (message.action === "location_request" && message.ok && typeof message.latitude === "number" && typeof message.longitude === "number") {
+              setRemoteLastLocation({ latitude: message.latitude, longitude: message.longitude, accuracyMeters: message.accuracyMeters, locationTime: message.locationTime, provider: message.provider });
+            }
+          }
         } catch { /* ignore les messages de statut non JSON */ }
       };
       socket.onerror = () => setRemoteRelayStatus("Erreur de connexion au relais");
@@ -126,6 +135,20 @@ function App() {
       setNotice("Impossible de joindre le relais : " + String(error));
     } finally { setOpeningRemoteConsole(false); }
   }, [remoteRelayUrl, remoteDeviceId]);
+
+  const sendAntitheftCommand = useCallback((action: "location_request" | "ring_start" | "ring_stop" | "show_message") => {
+    const socket = remoteSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setRemoteCommandResult("Commande non envoyée : connecte le relais et le téléphone.");
+      return;
+    }
+    const commandId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now());
+    const command: { type: string; action: string; commandId: string; timestamp: number; message?: string } = { type: "command", action, commandId, timestamp: Date.now() };
+    if (action === "show_message") command.message = remoteMessage.trim().slice(0, 240);
+    if (action === "show_message" && !command.message) { setRemoteCommandResult("Saisis un message avant de l'envoyer."); return; }
+    socket.send(JSON.stringify(command));
+    setRemoteCommandResult("Commande envoyée : " + action + ". En attente de l'accusé de réception…");
+  }, [remoteMessage]);
 
   useEffect(() => () => { remoteSocketRef.current?.close(); }, []);
 
@@ -643,6 +666,20 @@ function App() {
               <StatCard icon={<MapPin size={19}/>} label="Localisation GPS" value="À intégrer" foot="Permissions Android et relais requis" tone="violet"/>
               <StatCard icon={<Volume2 size={19}/>} label="Sonnerie à distance" value="À intégrer" foot="Nécessite agent et relais en ligne" tone="orange"/>
               <StatCard icon={<ShieldCheck size={19}/>} label="Mode administré" value="Non vérifié" foot="Device Owner non détecté par cette interface" tone="green"/>
+            </div>
+            <div className="panel security-panel">
+              <div className="panel-header"><div><h3>Commandes à distance</h3><p>Fonctionnent uniquement si le relais et NEXUS Agent sont connectés. La demande GPS utilise la dernière position connue et peut demander une permission Android.</p></div><Link2 size={19}/></div>
+              <div className="heading-actions remote-actions">
+                <button className="button button-primary" onClick={() => sendAntitheftCommand("location_request")}><MapPin size={16}/>Demander la position</button>
+                <button className="button button-secondary" onClick={() => sendAntitheftCommand("ring_start")}><Volume2 size={16}/>Faire sonner</button>
+                <button className="button button-secondary" onClick={() => sendAntitheftCommand("ring_stop")}><Volume2 size={16}/>Arrêter la sonnerie</button>
+              </div>
+              <label className="remote-field-label" htmlFor="antitheft-message">Message à afficher dans NEXUS Agent</label>
+              <input id="antitheft-message" className="remote-server-input" value={remoteMessage} maxLength={240} onChange={event => setRemoteMessage(event.target.value)} />
+              <div className="heading-actions remote-actions"><button className="button button-secondary" onClick={() => sendAntitheftCommand("show_message")}><MessageSquare size={16}/>Envoyer le message</button></div>
+              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Résultat de la dernière commande</strong><span>{remoteCommandResult}</span></div></div>
+              {remoteLastLocation && <div className="security-row"><div className="security-row-icon secure"><MapPin size={16}/></div><div className="security-row-copy"><strong>Dernière position reçue</strong><span>{remoteLastLocation.latitude.toFixed(6)}, {remoteLastLocation.longitude.toFixed(6)} · précision {typeof remoteLastLocation.accuracyMeters === "number" ? Math.round(remoteLastLocation.accuracyMeters) + " m" : "inconnue"} · {remoteLastLocation.locationTime ? new Date(remoteLastLocation.locationTime).toLocaleString("fr-FR") : "date inconnue"} · {remoteLastLocation.provider || "source inconnue"}</span><a href={"https://www.openstreetmap.org/?mlat=" + remoteLastLocation.latitude + "&mlon=" + remoteLastLocation.longitude + "#map=17/" + remoteLastLocation.latitude + "/" + remoteLastLocation.longitude} target="_blank" rel="noreferrer">Ouvrir sur la carte</a></div></div>}
+              <div className="info-banner"><ShieldCheck size={17}/><div><strong>Limites de cette première intégration</strong><p>Les commandes fonctionnent seulement tant que l’agent garde sa connexion WebSocket active. La localisation est la dernière position connue, pas un suivi continu. Les messages s’affichent dans l’application ouverte, pas de façon garantie sur l’écran verrouillé.</p></div></div>
             </div>
             <div className="dashboard-columns"><div className="panel"><div className="panel-header"><div><h3>Actions antivol prévues</h3><p>Fonctions à connecter à un agent autorisé et à un serveur sécurisé.</p></div><LockKeyhole size={19}/></div>
               <div className="integration-list">
