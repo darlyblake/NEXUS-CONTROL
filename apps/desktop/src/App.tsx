@@ -66,6 +66,8 @@ function App() {
   const [filePcDestination, setFilePcDestination] = useState("");
   const [fileAndroidPath, setFileAndroidPath] = useState("/sdcard/Download/");
   const [fileAndroidSource, setFileAndroidSource] = useState("/sdcard/Download/document.pdf");
+  const [wifiReceiverUrl, setWifiReceiverUrl] = useState("");
+  const [wifiReceiverToken, setWifiReceiverToken] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
   const [runtime, setRuntime] = useState(isDesktopRuntime());
   const [notice, setNotice] = useState("Bienvenue dans NEXUS CONTROL. Les connecteurs ne sont pas encore configurés.");
@@ -410,6 +412,19 @@ function App() {
                 void invoke<string>("adb_push_file", { serial, localPath: fileLocalPath.trim(), remotePath: fileAndroidPath.trim() || "/sdcard/Download/" })
                   .then(setNotice).catch(error => setNotice("Envoi échoué : " + String(error))).finally(() => setFileBusy(false));
               }}><FileUp size={16}/>{fileBusy ? "Transfert en cours…" : "Envoyer vers Android"}</button></div>
+            </div>
+            <div className="panel device-panel">
+              <div className="panel-header"><div><h3>Envoyer vers Android par Wi-Fi</h3><p>Pour envoyer sans câble, ouvre la page Réception dans l'application Android, démarre le récepteur et recopie l'adresse et le jeton affichés.</p></div><Wifi size={19}/></div>
+              <label className="remote-field-label" htmlFor="nexus-wifi-receiver-url">Adresse locale Android</label>
+              <input id="nexus-wifi-receiver-url" className="remote-server-input" placeholder="http://192.168.1.20:8765" value={wifiReceiverUrl} onChange={e => setWifiReceiverUrl(e.target.value)}/>
+              <label className="remote-field-label" htmlFor="nexus-wifi-receiver-token">Jeton de réception</label>
+              <input id="nexus-wifi-receiver-token" className="remote-server-input" placeholder="Jeton affiché sur Android" value={wifiReceiverToken} onChange={e => setWifiReceiverToken(e.target.value)}/>
+              <div className="heading-actions remote-actions"><button className="button button-primary" disabled={fileBusy || !fileLocalPath.trim() || !wifiReceiverUrl.trim() || !wifiReceiverToken.trim()} onClick={() => {
+                setFileBusy(true);
+                void invoke<string>("send_file_to_local_receiver", { localPath: fileLocalPath.trim(), receiverUrl: wifiReceiverUrl.trim(), token: wifiReceiverToken.trim() })
+                  .then(setNotice).catch(error => setNotice("Envoi Wi-Fi échoué : " + String(error))).finally(() => setFileBusy(false));
+              }}><Wifi size={16}/>{fileBusy ? "Transfert en cours…" : "Envoyer par Wi-Fi"}</button></div>
+              <div className="info-banner"><ShieldCheck size={17}/><div><strong>Réseau local uniquement</strong><p>Les deux appareils doivent être sur le même Wi-Fi. Le jeton protège le transfert, mais ce protocole local n'utilise pas HTTPS. N'active pas la réception sur un réseau public et arrête-la après usage.</p></div></div>
             </div>
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>Récupérer un fichier depuis Android</h3><p>Indique un chemin de fichier existant sur Android et le chemin de destination sur le PC.</p></div><FileDown size={19}/></div>
