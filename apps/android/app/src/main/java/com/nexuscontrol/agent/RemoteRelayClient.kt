@@ -76,7 +76,8 @@ class RemoteRelayClient(private val context: Context) {
             onStatus("Connexion au relais impossible : " + (error.message ?: error.javaClass.simpleName))
         }
     }
-\n    private fun connect(baseUrl: String, deviceId: String, token: String, onStatus: (String) -> Unit) {
+
+    private fun connect(baseUrl: String, deviceId: String, token: String, onStatus: (String) -> Unit) {
         val parsed = java.net.URI(baseUrl)
         val scheme = if (parsed.scheme == "https") "wss" else "ws"
         val authority = parsed.rawAuthority
