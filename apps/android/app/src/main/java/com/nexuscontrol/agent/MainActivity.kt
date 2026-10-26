@@ -38,11 +38,7 @@ class MainActivity : Activity() {
     private var selectedFile: Uri? = null
     private var selectedFileName: String = ""
     private var receiver: LocalTransferServer? = null
-    private val receiverToken: String by lazy {
-        prefs.getString("receiver_token", null) ?: UUID.randomUUID().toString().replace("-", "").also {
-            prefs.edit().putString("receiver_token", it).apply()
-        }
-    }
+    private var receiverToken: String = UUID.randomUUID().toString().replace("-", "")
     private val prefs by lazy { getSharedPreferences("nexus_agent", Context.MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -202,6 +198,7 @@ class MainActivity : Activity() {
                 showPage("receive")
             } else {
                 try {
+                    receiverToken = UUID.randomUUID().toString().replace("-", "")
                     receiver = LocalTransferServer(this, receiverToken) { file ->
                         runOnUiThread { showPage("receive"); dialog("Fichier reçu", "Fichier enregistré : " + file.name) }
                     }.also { it.start() }
@@ -222,7 +219,7 @@ class MainActivity : Activity() {
             }
         }
         section("SÉCURITÉ")
-        label("Utilise uniquement un Wi-Fi de confiance. Le transfert local est protégé par un jeton mais n'utilise pas HTTPS. Arrête la réception après usage.", 12f, muted, false)
+        label("Utilise uniquement un Wi-Fi de confiance. Le transfert local est limité à 100 Mo par fichier, protégé par un jeton temporaire mais n'utilise pas HTTPS. Arrête la réception après usage.", 12f, muted, false)
     }
 
     private fun buildDevicePage() {
