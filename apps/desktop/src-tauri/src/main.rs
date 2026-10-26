@@ -41,12 +41,54 @@ fn meshcentral_installed() -> bool {
         || command_exists("meshcentral")
 }
 
+fn adb_program() -> PathBuf {
+    let mut candidates = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        candidates.push(home.join("Android/Sdk/platform-tools/adb"));
+        candidates.push(home.join("Android/sdk/platform-tools/adb"));
+    }
+    candidates.extend([
+        PathBuf::from("/usr/lib/android-sdk/platform-tools/adb"),
+        PathBuf::from("/opt/android-sdk/platform-tools/adb"),
+    ]);
+    candidates.into_iter().find(|path| path.is_file()).unwrap_or_else(|| PathBuf::from("adb"))
+}
+
+fn adb_available() -> bool {
+    let path = adb_program();
+    path.is_file() || command_exists("adb")
+}
+
+fn require_authorized_android(serial: &str) -> Result<(), String> {
+    if serial.trim().is_empty() {
+        return Err("Identifiant Android manquant.".to_string());
+    }
+    let devices = read_android_devices()?;
+    if devices.iter().any(|device| device.id == serial && device.state == "device") {
+        Ok(())
+    } else {
+        Err("Appareil introuvable ou non autorisé. Vérifie le câble USB et accepte l'autorisation de débogage sur Android.".to_string())
+    }
+}
+
+fn validate_android_path(path: &str) -> Result<(), String> {
+    let trimmed = path.trim();
+    if !(trimmed.starts_with("/sdcard/") || trimmed.starts_with("/storage/emulated/0/")) {
+        return Err("Pour la sécurité, le chemin Android doit rester dans /sdcard/ ou /storage/emulated/0/.".to_string());
+    }
+    if trimmed.split('/').any(|part| part == "..") || trimmed.contains('\0') {
+        return Err("Le chemin Android contient un élément interdit.".to_string());
+    }
+    Ok(())
+}
+
 fn read_android_devices() -> Result<Vec<AndroidDevice>, String> {
-    if !command_exists("adb") {
+    if !adb_available() {
         return Ok(Vec::new());
     }
 
-    let output = Command::new("adb")
+    let output = Command::new(adb_program())
         .arg("devices")
         .arg("-l")
         .output()
@@ -404,7 +446,7 @@ fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
 
 #[tauri::command]
 fn build_and_install_android() -> Result<String, String> {
-    if !command_exists("adb") {
+    if !adb_available() {
         return Err("ADB n'est pas installé ou n'est pas accessible depuis NEXUS CONTROL. Installe Android platform-tools puis réessaie.".to_string());
     }
     // GUI apps launched from the desktop may not inherit the user's interactive Zsh PATH.
@@ -544,7 +586,7 @@ fn build_and_install_android() -> Result<String, String> {
         return Err("Gradle a terminé sans erreur, mais le fichier APK attendu n'a pas été trouvé.".to_string());
     }
 
-    let install = Command::new("adb")
+    let install = Command::new(adb_program())
         .args(["-s", device.id.as_str(), "install", "-r"])
         .arg(&apk)
         .output()
@@ -554,7 +596,7 @@ fn build_and_install_android() -> Result<String, String> {
         return Err(format!("L'APK a été compilé, mais son installation a échoué : {}", details.trim()));
     }
 
-    let launch = Command::new("adb")
+    let launch = Command::new(adb_program())
         .args(["-s", device.id.as_str(), "shell", "am", "start", "-n", "com.nexuscontrol.agent/.MainActivity"])
         .output()
         .map_err(|error| format!("L'application a été installée, mais son lancement n'a pas pu être demandé : {error}"))?;
@@ -568,6 +610,57 @@ fn build_and_install_android() -> Result<String, String> {
         "Compilation réussie et NEXUS Agent installé sur {} ({}).{}",
         device.model, device.id, launch_message
     ))
+}
+
+#[tauri::command]
+fn adb_push_file(serial: String, local_path: String, remote_path: String) -> Result<String, String> {
+    require_authorized_android(&serial)?;
+    validate_android_path(&remote_path)?;
+    let local = PathBuf::from(local_path.trim()).canonicalize()
+        .map_err(|error| format!("Impossible de lire le fichier source sur le PC : {error}"))?;
+    if !local.is_file() {
+        return Err("Le chemin local ne désigne pas un fichier ordinaire.".to_string());
+    }
+    let output = Command::new(adb_program())
+        .args(["-s", serial.as_str(), "push"])
+        .arg(&local)
+        .arg(remote_path.trim())
+        .output()
+        .map_err(|error| format!("Impossible de démarrer le transfert ADB : {error}"))?;
+    if !output.status.success() {
+        let details = format!("{}\n{}", String::from_utf8_lossy(&output.stdout).trim(), String::from_utf8_lossy(&output.stderr).trim());
+        return Err(format!("Le transfert vers Android a échoué : {}", details.trim()));
+    }
+    Ok(format!("Fichier envoyé vers Android : {} → {}", local.file_name().and_then(|name| name.to_str()).unwrap_or("fichier"), remote_path.trim()))
+}
+
+#[tauri::command]
+fn adb_pull_file(serial: String, remote_path: String, local_path: String) -> Result<String, String> {
+    require_authorized_android(&serial)?;
+    validate_android_path(&remote_path)?;
+    let destination = PathBuf::from(local_path.trim());
+    if destination.as_os_str().is_empty() {
+        return Err("Indique le chemin de destination sur le PC.".to_string());
+    }
+    let parent = destination.parent().filter(|path| !path.as_os_str().is_empty())
+        .ok_or("Le chemin de destination doit inclure un dossier existant.")?;
+    if !parent.is_dir() {
+        return Err(format!("Le dossier de destination n'existe pas : {}", parent.display()));
+    }
+    if destination.is_dir() {
+        return Err("La destination doit être un nom de fichier, pas un dossier.".to_string());
+    }
+    let output = Command::new(adb_program())
+        .args(["-s", serial.as_str(), "pull"])
+        .arg(remote_path.trim())
+        .arg(&destination)
+        .output()
+        .map_err(|error| format!("Impossible de démarrer la récupération ADB : {error}"))?;
+    if !output.status.success() {
+        let details = format!("{}\n{}", String::from_utf8_lossy(&output.stdout).trim(), String::from_utf8_lossy(&output.stderr).trim());
+        return Err(format!("La récupération depuis Android a échoué : {}", details.trim()));
+    }
+    Ok(format!("Fichier récupéré sur le PC : {}", destination.display()))
 }
 
 #[tauri::command]
@@ -940,6 +1033,8 @@ fn main() {
             get_local_tools,
             scan_android_devices,
             build_and_install_android,
+            adb_push_file,
+            adb_pull_file,
             scan_network_devices,
             connect_network_android,
             launch_scrcpy,
