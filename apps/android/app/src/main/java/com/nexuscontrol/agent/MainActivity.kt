@@ -14,7 +14,6 @@ import android.location.LocationManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.Manifest
-import android.content.pm.PackageManager
 import org.json.JSONObject
 import android.content.ClipboardManager
 import android.content.ClipData
