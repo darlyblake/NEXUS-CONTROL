@@ -47,6 +47,7 @@ internal static class Program
 internal sealed class CompanionApplication : ApplicationContext
 {
     private readonly CompanionConfig _config;
+    private readonly Control _dispatcher = new Control();
     private readonly NotifyIcon _tray;
     private readonly System.Windows.Forms.Timer _reconnectTimer;
     private ClientWebSocket? _socket;
@@ -60,6 +61,7 @@ internal sealed class CompanionApplication : ApplicationContext
     public CompanionApplication(CompanionConfig config)
     {
         _config = config;
+        _ = _dispatcher.Handle;
         var menu = new ContextMenuStrip();
         menu.Items.Add("État du compagnon", null, (_, _) => ShowStatus());
         menu.Items.Add("Arrêter le contrôle distant", null, (_, _) => StopControl("Arrêt demandé depuis Windows."));
@@ -175,12 +177,12 @@ internal sealed class CompanionApplication : ApplicationContext
                 return;
             }
             await SendStatusAsync(socket, "control_session_pending", null, null, ct);
-            var answer = MessageBox.Show(
+            var answer = await OnUiAsync(() => MessageBox.Show(
                 "Une demande de contrôle souris/clavier a été reçue depuis NEXUS CONTROL.\n\n" +
                 "Autoriser temporairement les clics, déplacements de souris, défilements et l’envoi de texte ?\n\n" +
                 "L’indicateur Windows restera visible. Tu peux arrêter la session ici à tout moment.",
                 "Autoriser le contrôle distant NEXUS CONTROL ?",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2));
             if (answer != DialogResult.Yes)
             {
                 await SendStatusAsync(socket, "control_session_denied", "Autorisation refusée localement sur Windows.", null, ct);
@@ -188,9 +190,7 @@ internal sealed class CompanionApplication : ApplicationContext
             }
             _activeControlId = Guid.NewGuid().ToString("N");
             _lastInputAt = DateTimeOffset.MinValue;
-            ShowStatus();
-            _statusForm?.SetState("CONTRÔLE DISTANT ACTIF — " + Environment.MachineName, true);
-            _tray.Text = "NEXUS CONTROL — CONTRÔLE DISTANT ACTIF";
+            await OnUiAsync(() => { ShowStatus(); _statusForm?.SetState("CONTRÔLE DISTANT ACTIF — " + Environment.MachineName, true); _tray.Text = "NEXUS CONTROL — CONTRÔLE DISTANT ACTIF"; return true; });
             await SendStatusAsync(socket, "control_session_started", null, _activeControlId, ct);
             return;
         }
@@ -250,12 +250,33 @@ internal sealed class CompanionApplication : ApplicationContext
 
     private void StopControl(string reason)
     {
+        if (_dispatcher.InvokeRequired)
+        {
+            try { _dispatcher.BeginInvoke(new Action(() => StopControl(reason))); } catch { }
+            return;
+        }
         var hadSession = _activeControlId is not null;
         _activeControlId = null;
         if (_statusForm is { IsDisposed: false }) _statusForm.SetState("Compagnon connecté — aucun contrôle actif", false);
         _tray.Text = "NEXUS CONTROL — aucun contrôle actif";
         if (hadSession && _socket?.State == WebSocketState.Open)
             _ = SendStatusAsync(_socket, "control_session_stopped", reason, null, CancellationToken.None);
+    }
+
+    private Task<T> OnUiAsync<T>(Func<T> action)
+    {
+        if (!_dispatcher.InvokeRequired) return Task.FromResult(action());
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            _dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { completion.SetResult(action()); }
+                catch (Exception ex) { completion.SetException(ex); }
+            }));
+        }
+        catch (Exception ex) { completion.SetException(ex); }
+        return completion.Task;
     }
 
     private static async Task SendAsync(ClientWebSocket socket, object value, CancellationToken ct)
