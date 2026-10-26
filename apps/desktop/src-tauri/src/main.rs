@@ -477,7 +477,7 @@ fn build_and_install_android() -> Result<String, String> {
     let existing_sdk = fs::read_to_string(&local_properties).ok().and_then(|content| {
         content.lines().find_map(|line| {
             let line = line.trim();
-            line.strip_prefix("sdk.dir=").map(|value| PathBuf::from(value.trim().replace("\\\\:", ":")))
+            line.strip_prefix("sdk.dir=").map(|value| PathBuf::from(value.trim().replace("\\:", ":")))
         })
     }).filter(|path| path.join("platform-tools/adb").is_file() || path.join("platforms").is_dir());
 
@@ -503,14 +503,14 @@ fn build_and_install_android() -> Result<String, String> {
     })?;
 
     // Write only the SDK location; preserve any other local.properties entries.
-    let sdk_value = sdk.to_string_lossy().replace("\\\\", "\\\\\\\\").replace(":", "\\\\:");
+    let sdk_value = sdk.to_string_lossy().replace("\\", "\\\\").replace(":", "\\:");
     let mut properties = fs::read_to_string(&local_properties).unwrap_or_default();
     let mut lines: Vec<String> = properties.lines()
         .filter(|line| !line.trim_start().starts_with("sdk.dir="))
         .map(str::to_string)
         .collect();
     lines.push(format!("sdk.dir={sdk_value}"));
-    properties = lines.join("\\n") + "\\n";
+    properties = lines.join("\n") + "\n";
     fs::write(&local_properties, properties)
         .map_err(|error| format!("Impossible d'écrire le chemin du SDK dans {} : {error}", local_properties.display()))?;
 
