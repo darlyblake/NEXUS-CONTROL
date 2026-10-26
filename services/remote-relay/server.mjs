@@ -17,6 +17,7 @@ const pairings = new Map();
 const tokens = new Map();
 const rateLimits = new Map();
 const socketsByPair = new Map();
+const targetRoles = new Map();
 
 function randomToken(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
@@ -126,6 +127,7 @@ const server = createServer(async (req, res) => {
     const desktopToken = randomToken();
     const expiresAt = Date.now() + PAIR_TTL_MS;
     pairings.set(code, { pairId, desktopDeviceId, expiresAt, redeemed: false });
+    targetRoles.set(pairId, "android");
     tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", targetRole: "android", expiresAt: Date.now() + 12 * 60 * 60 * 1000 });
     return json(res, 201, {
       protocol: 1,
@@ -157,6 +159,7 @@ const server = createServer(async (req, res) => {
       }
       socketsByPair.delete(pairId);
     }
+    targetRoles.delete(pairId);
     return json(res, 200, { ok: true, revoked: true });
   }
   if (req.method === "POST" && url.pathname === "/api/pair/redeem") {
@@ -186,6 +189,7 @@ const server = createServer(async (req, res) => {
     const deviceToken = randomToken();
     const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
     const role = platform;
+    targetRoles.set(pairing.pairId, role);
     for (const record of tokens.values()) {
       if (record.pairId === pairing.pairId && record.role === "desktop") record.targetRole = role;
     }
@@ -240,7 +244,7 @@ wss.on("connection", (ws) => {
       peers.set(identity.role, ws);
       socketsByPair.set(identity.pairId, peers);
       ws.send(JSON.stringify({ type: "authenticated", protocol: 1, pairId: identity.pairId, role: identity.role }));
-      const otherRole = identity.role === "desktop" ? (identity.targetRole || "android") : "desktop";
+      const otherRole = identity.role === "desktop" ? (targetRoles.get(identity.pairId) || identity.targetRole || "android") : "desktop";
       const other = peers.get(otherRole);
       if (other && other.readyState === WebSocket.OPEN) {
         other.send(JSON.stringify({ type: "peer_status", role: identity.role, connected: true }));
