@@ -95,6 +95,10 @@ function cleanupExpired() {
     if (recent.length) rateLimits.set(key, recent);
     else rateLimits.delete(key);
   }
+  const activePairIds = new Set([...tokens.values()].map((token) => token.pairId));
+  for (const pairId of targetRoles.keys()) {
+    if (!activePairIds.has(pairId)) targetRoles.delete(pairId);
+  }
 }
 const cleanupTimer = setInterval(cleanupExpired, 30_000);
 cleanupTimer.unref();
