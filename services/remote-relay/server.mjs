@@ -124,6 +124,29 @@ const server = createServer(async (req, res) => {
       instructions: "Affiche ce code uniquement à la personne qui doit associer son téléphone. Le code expire dans 5 minutes.",
     });
   }
+  if (req.method === "POST" && url.pathname === "/api/revoke") {
+    const authorization = req.headers.authorization || "";
+    const tokenValue = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+    const tokenRecord = tokenValue ? tokens.get(hash(tokenValue)) : null;
+    if (!tokenRecord || tokenRecord.expiresAt <= Date.now()) {
+      return json(res, 401, { error: "invalid_token", message: "Jeton invalide ou expiré." });
+    }
+    const pairId = tokenRecord.pairId;
+    for (const [tokenHash, record] of tokens) {
+      if (record.pairId === pairId) tokens.delete(tokenHash);
+    }
+    for (const [code, pairing] of pairings) {
+      if (pairing.pairId === pairId) pairings.delete(code);
+    }
+    const peers = socketsByPair.get(pairId);
+    if (peers) {
+      for (const peer of peers.values()) {
+        if (peer.readyState === WebSocket.OPEN) peer.close(4001, "pair_revoked");
+      }
+      socketsByPair.delete(pairId);
+    }
+    return json(res, 200, { ok: true, revoked: true });
+  }
   if (req.method === "POST" && url.pathname === "/api/pair/redeem") {
     const ip = getClientIp(req);
     if (!rateLimit(ip, "redeem", MAX_REDEEM_ATTEMPTS_PER_MINUTE)) {
