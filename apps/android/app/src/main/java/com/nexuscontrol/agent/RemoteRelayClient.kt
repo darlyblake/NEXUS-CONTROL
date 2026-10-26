@@ -96,7 +96,7 @@ class RemoteRelayClient(private val context: Context) {
                         "peer_status" -> onStatus(if (message.optBoolean("connected")) "PC et téléphone sont connectés au relais." else "Relais connecté ; en attente du PC.")
                         "command" -> {
                             val action = message.optString("action")
-                            if (action in setOf("location_request", "ring_start", "ring_stop", "show_message")) {
+                            if (action in setOf("location_request", "ring_start", "ring_stop", "show_message", "device_info", "installed_apps")) {
                                 commandHandler?.invoke(message)
                             } else {
                                 onStatus("Commande refusée : action inconnue.")
