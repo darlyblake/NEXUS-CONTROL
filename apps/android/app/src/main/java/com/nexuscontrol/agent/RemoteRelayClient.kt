@@ -122,6 +122,7 @@ class RemoteRelayClient(context: Context) {
                 if (base.isNullOrBlank() || token.isNullOrBlank()) {
                     prefs.edit().remove("relay_token").remove("relay_pair_id").apply()
                     disconnect()
+                    context.stopService(android.content.Intent(context, RemoteAgentService::class.java))
                     onStatus("Aucun jeton local enregistré.")
                     return@Thread
                 }
@@ -136,6 +137,7 @@ class RemoteRelayClient(context: Context) {
                 }
                 disconnect()
                 prefs.edit().remove("relay_token").remove("relay_pair_id").remove("relay_base_url").apply()
+                context.stopService(android.content.Intent(context, RemoteAgentService::class.java))
                 onStatus("Association révoquée côté serveur et jeton local supprimé.")
             } catch (error: Exception) {
                 onStatus("Révocation impossible : " + (error.message ?: error.javaClass.simpleName))
