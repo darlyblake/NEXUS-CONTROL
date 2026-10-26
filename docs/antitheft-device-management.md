@@ -2,7 +2,7 @@
 
 ## État réel de la version
 
-La page **Protection antivol** du bureau est une interface de préparation. Elle n'envoie pas encore de commandes de localisation, de sonnerie ou de message à un agent Android distant. Le relais expérimental actuel ne doit pas être présenté comme un service de gestion antivol opérationnel.
+Le prototype du bureau et l'agent Android prennent en charge des commandes distantes limitées via le relais, mais ce n'est pas un service de gestion antivol prêt pour la production.
 
 ## État de la première intégration (octobre 2026)
 
@@ -59,3 +59,19 @@ Kali Linux n'accorde pas automatiquement de privilèges supplémentaires à Andr
 - La dernière position indique toujours son horodatage et, si disponible, sa précision.
 - Les secrets ne sont pas écrits dans les journaux et les données sensibles sont chiffrées en transit.
 - Les fonctions d'administration sont testées sur un appareil de test réinitialisable avant un appareil utilisé au quotidien.
+
+
+## Préparation Android Enterprise — déploiement interne
+
+L'écran **Appareil** propose désormais des actions explicites pour :
+- demander l'autorisation de localisation en arrière-plan après l'autorisation au premier plan ;
+- demander l'autorisation caméra via Android (aucune capture distante n'est déclenchée par cette autorisation) ;
+- activer l'administrateur Android classique depuis l'écran système de confirmation.
+
+### Limites du scénario sans réinitialisation
+
+- Sur un appareil déjà configuré, sans réinitialisation, l'application ne peut généralement pas devenir **Device Owner**. L'enrôlement complet Android Enterprise doit être préparé selon le mode de gestion pris en charge par l'organisation et exige souvent un appareil neuf ou réinitialisé.
+- L'administrateur Android classique n'est pas Device Owner et ne rend pas l'application impossible à désinstaller. L'utilisateur peut le désactiver dans les paramètres.
+- La permission caméra ne permet pas une capture secrète ni une utilisation garantie en arrière-plan. La capture distante n'est pas implémentée.
+- L'autorisation de localisation en arrière-plan ne garantit ni une position fraîche ni une connexion permanente. Aucun service de premier plan persistant n'est intégré à cette version ; Android et les fabricants peuvent suspendre le processus.
+- Avant un déploiement en entreprise, valider l'enrôlement, la révocation, la transparence pour les employés et les règles de conservation des positions sur un appareil de test approuvé.

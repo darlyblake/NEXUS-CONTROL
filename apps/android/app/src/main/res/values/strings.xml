@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">NEXUS Agent</string>
     <string name="accessibility_description">Permet le contrôle à distance uniquement lorsque le propriétaire active explicitement le service et autorise une session de confiance.</string>
+    <string name="device_admin_description">Permet à NEXUS CONTROL d’utiliser les fonctions d’administration Android déclarées, après confirmation explicite.</string>
 </resources>

@@ -344,6 +344,38 @@ class MainActivity : Activity() {
             if (fine || coarse) dialog("Localisation", "Une permission de localisation est déjà accordée.")
             else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 3101)
         }
+        action("Autoriser la localisation en arrière-plan", "Autorisation Android distincte ; cela ne garantit pas une connexion permanente.") {
+            val foregroundGranted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!foregroundGranted) {
+                dialog("Étape préalable", "Accorde d'abord la localisation lorsque l'application est utilisée, puis réessaie.")
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 3101)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) dialog("Localisation", "L'autorisation en arrière-plan est déjà accordée.")
+                else requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 3102)
+            } else dialog("Localisation", "Aucune autorisation séparée n'est requise sur cette version Android.")
+        }
+        action("Autoriser la caméra", "Demande l'autorisation Android. Cela n'active pas une capture distante.") {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) dialog("Caméra", "Autorisation accordée ; aucune capture distante n'est actuellement implémentée.")
+            else requestPermissions(arrayOf(Manifest.permission.CAMERA), 3103)
+        }
+        val adminComponent = android.content.ComponentName(this, NexusDeviceAdminReceiver::class.java)
+        val adminManager = getSystemService(DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+        section("ADMINISTRATION DE L'APPAREIL")
+        card {
+            label(if (adminManager.isAdminActive(adminComponent)) "Administrateur Android : activé" else "Administrateur Android : non activé", 14f, textColor, true)
+            label("Ce mode classique n'est pas Device Owner et ne bloque pas à lui seul la désinstallation.", 12f, muted, false)
+        }
+        if (!adminManager.isAdminActive(adminComponent)) {
+            action("Activer l'administration", "Ouvre la confirmation officielle Android. L'utilisateur peut refuser ou désactiver cet accès.") {
+                val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                    putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Autorise les politiques d'administration déclarées. Cela ne rend pas l'application indésinstallable.")
+                }
+                startActivity(intent)
+            }
+        } else {
+            action("Gérer l'administration", "Ouvre les paramètres de sécurité Android.") { startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) }
+        }
         action("Autoriser la capture d'écran", "Android demande confirmation ; le flux distant n'est pas encore intégré.") {
             val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             @Suppress("DEPRECATION")
