@@ -53,7 +53,7 @@ function json(res, status, data) {
     "x-content-type-options": "nosniff",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "content-type",
+    "access-control-allow-headers": "content-type, authorization",
   });
   res.end(body);
 }
@@ -88,7 +88,7 @@ cleanupTimer.unref();
 
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "600" });
+    res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type, authorization", "access-control-max-age": "600" });
     return res.end();
   }
   const url = new URL(req.url || "/", "http://localhost");
