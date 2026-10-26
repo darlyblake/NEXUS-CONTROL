@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: nexus-control-remote-relay
+    runtime: node
+    plan: free
+    rootDir: services/remote-relay
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
