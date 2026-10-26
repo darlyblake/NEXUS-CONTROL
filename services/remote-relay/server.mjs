@@ -271,7 +271,10 @@ wss.on("connection", (ws) => {
       if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
       const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", "windows_status", "windows_list_processes", "windows_run_powershell"]);
       if (message.type === "command") {
+        const windowsAction = typeof message.action === "string" && message.action.startsWith("windows_");
+        const targetRole = targetRoles.get(identity.pairId) || "android";
         if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
+            (windowsAction && targetRole !== "windows") || (!windowsAction && targetRole === "windows") ||
             typeof message.commandId !== "string" || message.commandId.length > 100 ||
             typeof message.timestamp !== "number" || Math.abs(Date.now() - message.timestamp) > 60_000 ||
             (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240)) ||
@@ -279,7 +282,9 @@ wss.on("connection", (ws) => {
           return ws.close(4403, "invalid_or_unauthorized_command");
         }
       } else if (message.type === "command_result") {
+        const windowsResult = typeof message.action === "string" && message.action.startsWith("windows_");
         if (identity.role === "desktop" || !allowedActions.has(message.action) ||
+            (identity.role === "windows" && !windowsResult) || (identity.role === "android" && windowsResult) ||
             typeof message.commandId !== "string" || message.commandId.length > 100 ||
             (typeof message.detail === "string" && message.detail.length > 2000) ||
             (typeof message.output === "string" && message.output.length > 12000)) {
