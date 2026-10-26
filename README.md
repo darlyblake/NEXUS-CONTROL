@@ -67,21 +67,11 @@ Le panneau **Protection antivol** présente la feuille de route de gestion Andro
 
 ## Validation continue
 
-Un workflow GitHub Actions vérifie le build frontend et la compilation Rust sur Ubuntu.
+Un workflow GitHub Actions vérifie le build frontend et la compilation Rust sur Ubuntu. Le workflow **Build desktop** construit les paquets natifs Linux et Windows et échoue si les artefacts attendus ne sont pas produits.
 
 ## Licence
 
 MIT — voir [LICENSE](LICENSE). Les logiciels intégrés restent soumis à leurs licences respectives.
-
-
-## Agent Android (NEXUS Agent)
-
-Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il fournit un tableau de bord local, les informations de l'appareil, un sélecteur de fichiers, une demande de consentement système pour la capture d'écran, un inventaire des applications visibles et une liste locale d'appareils de confiance révocable.
-
-Pour compiler sur Ubuntu, consulte [le guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
-
-**Important :** le relais distant expérimental et les premières interfaces d'association sont ajoutés, mais cela ne constitue pas encore une session de contrôle complète. Le transfert de fichiers via Internet, les commandes distantes et le flux d'écran restent à implémenter. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
-
 
 ## Agent Android (NEXUS Agent)
 
@@ -90,7 +80,6 @@ Le compagnon Android se trouve dans [apps/android](apps/android/README.md). Il f
 Pour compiler sur Ubuntu, consulte le [guide Android](apps/android/README.md). GitHub Actions peut aussi produire un APK de débogage téléchargeable depuis les artefacts du workflow **Android APK**.
 
 **Important :** le relais distant expérimental et les premières interfaces d'association sont ajoutés, mais cela ne constitue pas encore une session de contrôle complète. Le transfert de fichiers via Internet, les commandes distantes et le flux d'écran restent à implémenter. Le service d'accessibilité est inactif et n'exécute aucune commande distante.
-
 
 ## Relais distant expérimental
 

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
+import { isIP } from "node:net";
 import { WebSocketServer, WebSocket } from "ws";
 
 const PORT = Number(process.env.PORT || 8787);
@@ -66,7 +67,18 @@ async function readJson(req) {
   try { return JSON.parse(raw || "{}"); } catch { throw new Error("invalid_json"); }
 }
 function getClientIp(req) {
-  // Do not trust forwarded headers here; hosting should rate-limit at its edge too.
+  // Render terminates TLS at a reverse proxy. Use its forwarded client address
+  // only in the Render environment; do not trust arbitrary forwarded headers
+  // when the relay runs directly on a local machine or another host.
+  if (process.env.RENDER_SERVICE_ID) {
+    const forwarded = req.headers["x-forwarded-for"];
+    const values = Array.isArray(forwarded) ? forwarded : [forwarded];
+    for (const value of values) {
+      if (typeof value !== "string") continue;
+      const clientIp = value.split(",")[0]?.trim();
+      if (clientIp && isIP(clientIp)) return clientIp;
+    }
+  }
   return req.socket.remoteAddress || "unknown";
 }
 function cleanupExpired() {
