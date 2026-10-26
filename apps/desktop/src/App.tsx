@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { ScreenSharePanel } from "./components/ScreenSharePanel";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
@@ -559,6 +560,7 @@ function App() {
               <div className="heading-actions remote-actions"><button className="button button-primary" disabled={!remoteRelayUrl.trim() || openingRemoteConsole} onClick={() => void createRemotePair()}><Link2 size={16}/>{openingRemoteConsole ? "Connexion…" : "Créer un code d'association"}</button></div>
               {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur l’appareil cible dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
               <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
+              {remotePeerRole === "windows" && <ScreenSharePanel socket={remoteSocketRef.current} connected={remoteRelayStatus.includes("connecté") || remoteRelayStatus.includes("authentifié")} onNotice={setNotice} />}
               {remotePeerRole === "windows" && <div className="panel device-panel">
                 <div className="panel-header"><div><h3>Contrôle Windows</h3><p>Commandes envoyées uniquement à l’agent Windows authentifié dans cette association.</p></div><Terminal size={20}/></div>
                 <div className="heading-actions remote-actions">
