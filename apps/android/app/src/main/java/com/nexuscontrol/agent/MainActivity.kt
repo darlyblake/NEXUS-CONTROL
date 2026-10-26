@@ -61,52 +61,55 @@ class MainActivity : Activity() {
     private fun buildUi() = showPage("home")
 
     private fun showPage(page: String) {
-        val frame = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(navy) }
-        val sidebar = LinearLayout(this).apply {
+        // Structure verticale : contenu défilant en haut, barre de navigation fixe en bas.
+        val frame = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(18), dp(8), dp(12))
-            setBackgroundColor(Color.rgb(8, 16, 32))
-            layoutParams = LinearLayout.LayoutParams(dp(136), -1)
-        }
-        sidebar.addView(TextView(this).apply {
-            text = "◈\nNEXUS"
-            gravity = Gravity.CENTER
-            textSize = 19f
-            setTypeface(null, 1)
-            setTextColor(accent)
-            setPadding(0, 0, 0, dp(22))
-        })
-        val menu = listOf(
-            Pair("home", "⌂  Accueil"),
-            Pair("send", "↑  Envoyer"),
-            Pair("receive", "↓  Réception"),
-            Pair("device", "▣  Appareil"),
-            Pair("security", "◇  Sécurité")
-        )
-        menu.forEach { item ->
-            val navItem = TextView(this).apply {
-                text = item.second
-                textSize = 13f
-                setTextColor(if (page == item.first) Color.WHITE else muted)
-                setTypeface(null, if (page == item.first) 1 else 0)
-                setPadding(dp(9), dp(15), dp(3), dp(15))
-                if (page == item.first) setBackgroundColor(panel)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { showPage(item.first) }
-            }
-            val lp = LinearLayout.LayoutParams(-1, -2)
-            lp.bottomMargin = dp(5)
-            sidebar.addView(navItem, lp)
+            setBackgroundColor(navy)
         }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(20), dp(16), dp(24))
+            setPadding(dp(16), dp(20), dp(16), dp(16))
             setBackgroundColor(navy)
         }
-        val scroll = ScrollView(this).apply { addView(root) }
-        frame.addView(sidebar)
-        frame.addView(scroll, LinearLayout.LayoutParams(0, -1, 1f))
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        }
+        frame.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val bottomNav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(5), dp(4), dp(5))
+            setBackgroundColor(Color.rgb(8, 16, 32))
+            elevation = dp(10).toFloat()
+        }
+        val menu = listOf(
+            Triple("home", "⌂", "Accueil"),
+            Triple("send", "↑", "Envoyer"),
+            Triple("receive", "↓", "Réception"),
+            Triple("device", "▣", "Appareil"),
+            Triple("security", "◇", "Sécurité")
+        )
+        menu.forEach { item ->
+            val selected = page == item.first
+            val navItem = TextView(this).apply {
+                text = item.second + "\\n" + item.third
+                gravity = Gravity.CENTER
+                textSize = 10f
+                setLineSpacing(0f, 1f)
+                setTextColor(if (selected) accent else muted)
+                setTypeface(null, if (selected) 1 else 0)
+                setPadding(dp(2), dp(7), dp(2), dp(7))
+                if (selected) setBackgroundColor(panel)
+                isClickable = true
+                isFocusable = true
+                contentDescription = item.third
+                setOnClickListener { showPage(item.first) }
+            }
+            bottomNav.addView(navItem, LinearLayout.LayoutParams(0, -1, 1f))
+        }
+        frame.addView(bottomNav, LinearLayout.LayoutParams(-1, dp(62)))
         setContentView(frame)
 
         when (page) {
