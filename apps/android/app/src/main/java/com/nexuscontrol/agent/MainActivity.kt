@@ -422,6 +422,11 @@ class MainActivity : Activity() {
         remoteStatusView = status
         root.addView(status)
         action("Associer et connecter", "Utilise le code affiché dans NEXUS CONTROL sur le PC.") {
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 3104)
+                dialog("Notifications requises", "Autorise les notifications puis appuie de nouveau sur Associer et connecter pour afficher l'état du service distant.")
+                return@action
+            }
             val base = relayUrl.text.toString().trim().trimEnd('/')
             val code = pairCode.text.toString().trim().uppercase()
             if (!base.startsWith("https://") && !base.startsWith("http://10.0.2.2") && !base.startsWith("http://localhost")) {

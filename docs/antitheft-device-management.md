@@ -12,7 +12,7 @@ Le bureau et l'agent Android disposent maintenant d'un premier protocole de comm
 - affichage d'un message dans l'application Android ouverte ;
 - validation côté relais du rôle émetteur, de l'action autorisée, de l'identifiant et de l'horodatage de commande.
 
-Ce n'est pas encore un système antivol complet. L'agent doit rester actif et connecté au WebSocket ; la livraison en arrière-plan n'est pas garantie. La localisation n'obtient pas nécessairement un nouveau relevé GPS. Le message n'est pas garanti sur l'écran verrouillé. Le mode Device Owner, les notifications persistantes, l'historique côté serveur et les tests sur un appareil réel restent à faire. Le workflow CI compile l'APK Android ; cela ne remplace pas un test pratique sur téléphone.
+Ce n'est pas encore un système antivol complet. L'agent dispose maintenant d'un service au premier plan avec notification persistante et tentative de reconnexion après une interruption. Android et les fabricants peuvent néanmoins arrêter ou limiter ce service ; la livraison en arrière-plan n'est pas garantie. La localisation n'obtient pas nécessairement un nouveau relevé GPS. Le message n'est pas garanti sur l'écran verrouillé. Le mode Device Owner, l'historique côté serveur et les tests sur un appareil réel restent à faire. Le service utilise le type Android dataSync, soumis aux limites de durée et aux politiques de la version Android ; ce n'est pas une garantie de connexion 24 h/24. Le workflow CI compile l'APK Android ; cela ne remplace pas un test pratique sur téléphone.
 
 ## Architecture cible
 
@@ -75,3 +75,12 @@ L'écran **Appareil** propose désormais des actions explicites pour :
 - La permission caméra ne permet pas une capture secrète ni une utilisation garantie en arrière-plan. La capture distante n'est pas implémentée.
 - L'autorisation de localisation en arrière-plan ne garantit ni une position fraîche ni une connexion permanente. Aucun service de premier plan persistant n'est intégré à cette version ; Android et les fabricants peuvent suspendre le processus.
 - Avant un déploiement en entreprise, valider l'enrôlement, la révocation, la transparence pour les employés et les règles de conservation des positions sur un appareil de test approuvé.
+
+
+## Service distant visible
+
+Après l'association, l'agent démarre RemoteAgentService au premier plan et affiche une notification permanente avec l'état de connexion et une action Arrêter. En cas de coupure détectée, il tente une reconnexion après 15 secondes. La révocation d'association arrête aussi ce service.
+
+Le service traite les commandes autorisées suivantes : dernière position connue, démarrage/arrêt de sonnerie et notification du message du propriétaire. Les messages apparaissent comme notifications système ; ils ne sont pas garantis à l'écran verrouillé si les notifications sont désactivées. La localisation est la dernière position connue, pas nécessairement un nouveau relevé GPS.
+
+Limite de plateforme : le service utilise le type dataSync et les restrictions Android modernes sur les services au premier plan s'appliquent. L'économie d'énergie, l'arrêt forcé par l'utilisateur, l'absence de réseau ou la révocation peuvent interrompre le service. Aucun contrôle caméra à distance n'est ajouté.

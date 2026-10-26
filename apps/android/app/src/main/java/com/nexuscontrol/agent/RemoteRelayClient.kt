@@ -46,7 +46,14 @@ class RemoteRelayClient(context: Context) {
                     val pairId = json.getString("pairId")
                     prefs.edit().putString("relay_token", token).putString("relay_pair_id", pairId)
                         .putString("relay_base_url", base).putString("relay_device_id", deviceId).apply()
-                    connect(base, deviceId, token, onStatus)
+                    onStatus("Association enregistrée. Démarrage du service distant visible…")
+                    val serviceIntent = android.content.Intent(context, RemoteAgentService::class.java)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
+                    }
+                    onStatus("Service distant demandé. Vérifie sa notification et l'état de connexion.")
                 }
             } catch (error: Exception) {
                 onStatus("Échec de l'association : " + (error.message ?: error.javaClass.simpleName))
@@ -54,7 +61,22 @@ class RemoteRelayClient(context: Context) {
         }.start()
     }
 
-    private fun connect(baseUrl: String, deviceId: String, token: String, onStatus: (String) -> Unit) {
+    
+    fun connectSavedSession(onStatus: (String) -> Unit) {
+        val base = prefs.getString("relay_base_url", null)
+        val token = prefs.getString("relay_token", null)
+        val deviceId = prefs.getString("relay_device_id", null)
+        if (base.isNullOrBlank() || token.isNullOrBlank() || deviceId.isNullOrBlank()) {
+            onStatus("Aucune association enregistrée. Associe d'abord cet appareil depuis l'application.")
+            return
+        }
+        try {
+            connect(base, deviceId, token, onStatus)
+        } catch (error: Exception) {
+            onStatus("Connexion au relais impossible : " + (error.message ?: error.javaClass.simpleName))
+        }
+    }
+\n    private fun connect(baseUrl: String, deviceId: String, token: String, onStatus: (String) -> Unit) {
         val parsed = java.net.URI(baseUrl)
         val scheme = if (parsed.scheme == "https") "wss" else "ws"
         val authority = parsed.rawAuthority
@@ -100,6 +122,7 @@ class RemoteRelayClient(context: Context) {
                 if (base.isNullOrBlank() || token.isNullOrBlank()) {
                     prefs.edit().remove("relay_token").remove("relay_pair_id").apply()
                     disconnect()
+                    context.stopService(android.content.Intent(context, RemoteAgentService::class.java))
                     onStatus("Aucun jeton local enregistré.")
                     return@Thread
                 }
@@ -114,6 +137,7 @@ class RemoteRelayClient(context: Context) {
                 }
                 disconnect()
                 prefs.edit().remove("relay_token").remove("relay_pair_id").remove("relay_base_url").apply()
+                context.stopService(android.content.Intent(context, RemoteAgentService::class.java))
                 onStatus("Association révoquée côté serveur et jeton local supprimé.")
             } catch (error: Exception) {
                 onStatus("Révocation impossible : " + (error.message ?: error.javaClass.simpleName))
