@@ -39,4 +39,4 @@ Trusted devices are stored locally on this phone and can be removed by the user.
 3. Dans NEXUS Agent, ouvre **Distant**, saisis la même URL et le code affiché sur le PC, puis touche **Associer et connecter**.
 4. Garde les deux applications ouvertes pendant ce test. La connexion indique la présence des deux clients, mais les commandes de fichiers et le contrôle d’écran par Internet ne sont pas encore implémentés.
 
-Le jeton Android est conservé dans les préférences privées de l’application. Cette première version n’a pas encore de stockage sécurisé dédié, de service de connexion en arrière-plan ni de mécanisme complet de révocation serveur. Ne l’utilise pas avec des données sensibles avant ces étapes.
+Le jeton Android est conservé dans les préférences privées de l’application. Cette première version n’a pas encore de stockage sécurisé dédié ni de service de connexion en arrière-plan. La révocation serveur est disponible lorsque le relais est joignable. Ne l’utilise pas avec des données sensibles avant d’avoir validé le déploiement et les tests.
