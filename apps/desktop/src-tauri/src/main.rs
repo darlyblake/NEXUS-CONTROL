@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::PathBuf, process::Command, time::Duration};
 
 #[derive(Serialize)]
 struct LocalTool {
@@ -635,6 +635,58 @@ fn adb_push_file(serial: String, local_path: String, remote_path: String) -> Res
 }
 
 #[tauri::command]
+fn send_file_to_local_receiver(local_path: String, receiver_url: String, token: String) -> Result<String, String> {
+    let local = PathBuf::from(local_path.trim()).canonicalize()
+        .map_err(|error| format!("Impossible de lire le fichier source : {error}"))?;
+    if !local.is_file() {
+        return Err("Le chemin source ne désigne pas un fichier ordinaire.".to_string());
+    }
+    if token.len() < 16 || token.len() > 128 || !token.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err("Jeton invalide : utilise le jeton alphanumérique affiché dans Réception sur Android.".to_string());
+    }
+
+    let parsed = url::Url::parse(receiver_url.trim())
+        .map_err(|error| format!("Adresse du récepteur invalide : {error}"))?;
+    if parsed.scheme() != "http" || !parsed.username().is_empty() || parsed.password().is_some()
+        || parsed.path() != "/" || parsed.query().is_some() || parsed.fragment().is_some()
+        || parsed.port_or_known_default() != Some(8765) {
+        return Err("Utilise l'adresse locale complète au format http://IP_ANDROID:8765.".to_string());
+    }
+    let host = parsed.host_str().ok_or("Adresse IP du téléphone manquante.")?;
+    let ip: IpAddr = host.parse().map_err(|_| "Saisis l'adresse IPv4 affichée dans la page Réception Android.".to_string())?;
+    match ip {
+        IpAddr::V4(v4) if v4.is_private() || v4.is_link_local() => {}
+        _ => return Err("Pour la sécurité, le transfert accepte uniquement une adresse IPv4 privée du réseau local.".to_string()),
+    }
+    let port = parsed.port_or_known_default().unwrap_or(8765);
+    let mut stream = TcpStream::connect((ip, port))
+        .map_err(|error| format!("Connexion au téléphone impossible : {error}. Vérifie le Wi-Fi et que Réception est activée."))?;
+    stream.set_write_timeout(Some(Duration::from_secs(120))).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(Duration::from_secs(120))).map_err(|e| e.to_string())?;
+
+    let file_name = local.file_name().and_then(|name| name.to_str()).unwrap_or("fichier");
+    let encoded_name: String = url::form_urlencoded::byte_serialize(file_name.as_bytes()).collect();
+    let metadata = fs::metadata(&local).map_err(|error| error.to_string())?;
+    let request = format!(
+        "PUT /upload?name={} HTTP/1.1\r\nHost: {}:{}\r\nAuthorization: Bearer {}\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        encoded_name, ip, port, token, metadata.len()
+    );
+    stream.write_all(request.as_bytes()).map_err(|error| format!("Impossible d'initialiser le transfert : {error}"))?;
+    let mut file = fs::File::open(&local).map_err(|error| error.to_string())?;
+    copy(&mut file, &mut stream).map_err(|error| format!("Échec pendant l'envoi du fichier : {error}"))?;
+    stream.shutdown(Shutdown::Write).map_err(|error| error.to_string())?;
+
+    let mut response = String::new();
+    stream.read_to_string(&mut response).map_err(|error| format!("Aucune confirmation du téléphone : {error}"))?;
+    let status = response.lines().next().unwrap_or("Réponse HTTP vide");
+    if status.contains(" 200 ") {
+        Ok(format!("Fichier envoyé au téléphone : {} ({} octets).", file_name, metadata.len()))
+    } else {
+        Err(format!("Le téléphone a refusé le transfert : {}. Vérifie le jeton et l'espace disponible.", status))
+    }
+}
+
+#[tauri::command]
 fn adb_pull_file(serial: String, remote_path: String, local_path: String) -> Result<String, String> {
     require_authorized_android(&serial)?;
     validate_android_path(&remote_path)?;
@@ -1034,6 +1086,7 @@ fn main() {
             scan_android_devices,
             build_and_install_android,
             adb_push_file,
+            send_file_to_local_receiver,
             adb_pull_file,
             scan_network_devices,
             connect_network_android,
