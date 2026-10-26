@@ -56,10 +56,38 @@ async function connect(deviceId, token) {
   const socket = new WebSocket(baseUrl.replace("http:", "ws:") + "/ws");
   await once(socket, "open");
   socket.send(JSON.stringify({ type: "auth", deviceId, token }));
-  const [raw] = await once(socket, "message");
-  const message = JSON.parse(raw.toString());
-  assert.equal(message.type, "authenticated");
+  await new Promise((resolveAuth, rejectAuth) => {
+    const timer = setTimeout(() => rejectAuth(new Error("Authentication timed out")), 3_000);
+    const onMessage = (raw) => {
+      let message;
+      try { message = JSON.parse(raw.toString()); } catch { return; }
+      if (message.type !== "authenticated") return;
+      clearTimeout(timer);
+      socket.off("message", onMessage);
+      resolveAuth();
+    };
+    socket.on("message", onMessage);
+    socket.once("error", (error) => { clearTimeout(timer); rejectAuth(error); });
+  });
   return socket;
+}
+
+function waitForMessage(socket, predicate, timeoutMs = 3_000) {
+  return new Promise((resolveMessage, rejectMessage) => {
+    const timer = setTimeout(() => {
+      socket.off("message", onMessage);
+      rejectMessage(new Error("Timed out waiting for expected relay message"));
+    }, timeoutMs);
+    const onMessage = (raw) => {
+      let message;
+      try { message = JSON.parse(raw.toString()); } catch { return; }
+      if (!predicate(message)) return;
+      clearTimeout(timer);
+      socket.off("message", onMessage);
+      resolveMessage(message);
+    };
+    socket.on("message", onMessage);
+  });
 }
 
 before(async () => {
@@ -94,15 +122,14 @@ test("authenticated desktop commands are relayed to the paired phone", async () 
   const pc = await connect("desktop-test-01", desktop.desktopToken);
   const phone = await connect("android-test-01", android.deviceToken);
   try {
-    const received = once(phone, "message");
+    const received = waitForMessage(phone, (message) => message.type === "command" && message.commandId === "test-command-1");
     pc.send(JSON.stringify({
       type: "command",
       action: "ring_start",
       commandId: "test-command-1",
       timestamp: Date.now(),
     }));
-    const [raw] = await received;
-    const message = JSON.parse(raw.toString());
+    const message = await received;
     assert.equal(message.action, "ring_start");
     assert.equal(message.commandId, "test-command-1");
   } finally {
