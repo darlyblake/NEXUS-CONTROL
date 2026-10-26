@@ -660,11 +660,11 @@ function App() {
           </section>}
 
           {page === "protection" && <section className="page-body">
-            <div className="security-hero"><div className="security-shield"><ShieldAlert size={28}/></div><div><span className="security-kicker">PROTECTION ANDROID</span><h2>Préparer les fonctions antivol de l’appareil.</h2><p>Interface de préparation : les commandes ci-dessous ne sont pas encore reliées à un agent Android distant.</p></div></div>
+            <div className="security-hero"><div className="security-shield"><ShieldAlert size={28}/></div><div><span className="security-kicker">PROTECTION ANDROID</span><h2>Préparer les fonctions antivol de l’appareil.</h2><p>Première intégration disponible si NEXUS Agent reste ouvert et connecté au relais. Les limites de chaque commande sont indiquées ci-dessous.</p></div></div>
             <div className="stats-grid">
               <StatCard icon={<Smartphone size={19}/>} label="Android via ADB" value={String(connectedAndroid)} foot={connectedAndroid ? "Appareil local autorisé" : "Aucun appareil autorisé détecté"} tone="blue"/>
-              <StatCard icon={<MapPin size={19}/>} label="Localisation GPS" value="À intégrer" foot="Permissions Android et relais requis" tone="violet"/>
-              <StatCard icon={<Volume2 size={19}/>} label="Sonnerie à distance" value="À intégrer" foot="Nécessite agent et relais en ligne" tone="orange"/>
+              <StatCard icon={<MapPin size={19}/>} label="Localisation GPS" value="Prototype actif" foot="Dernière position connue ; permission requise" tone="violet"/>
+              <StatCard icon={<Volume2 size={19}/>} label="Sonnerie à distance" value="Prototype actif" foot="Agent connecté requis" tone="orange"/>
               <StatCard icon={<ShieldCheck size={19}/>} label="Mode administré" value="Non vérifié" foot="Device Owner non détecté par cette interface" tone="green"/>
             </div>
             <div className="panel security-panel">
@@ -683,12 +683,12 @@ function App() {
             </div>
             <div className="dashboard-columns"><div className="panel"><div className="panel-header"><div><h3>Actions antivol prévues</h3><p>Fonctions à connecter à un agent autorisé et à un serveur sécurisé.</p></div><LockKeyhole size={19}/></div>
               <div className="integration-list">
-                <IntegrationRow icon={<MapPin size={19}/>} name="Demander la position" description="Position actuelle ou dernière position connue avec son horodatage." status="Connecteur requis" good={false}/>
-                <IntegrationRow icon={<Volume2 size={19}/>} name="Faire sonner" description="Déclencher une alerte sonore sur l’appareil associé." status="Connecteur requis" good={false}/>
-                <IntegrationRow icon={<MessageSquare size={19}/>} name="Message sur écran verrouillé" description="Afficher les coordonnées du propriétaire via les fonctions autorisées par Android." status="Connecteur requis" good={false}/>
+                <IntegrationRow icon={<MapPin size={19}/>} name="Demander la position" description="Renvoie la dernière position connue avec horodatage et précision si disponible." status="Prototype actif" good={true}/>
+                <IntegrationRow icon={<Volume2 size={19}/>} name="Faire sonner" description="Déclenche la sonnerie lorsque l’agent est connecté." status="Prototype actif" good={true}/>
+                <IntegrationRow icon={<MessageSquare size={19}/>} name="Message dans l’application" description="Affiche un message dans NEXUS Agent ; l’écran verrouillé n’est pas garanti." status="Prototype actif" good={true}/>
                 <IntegrationRow icon={<ShieldAlert size={19}/>} name="Alertes de sécurité" description="Recevoir les événements que l’OS et l’agent sont autorisés à observer." status="Connecteur requis" good={false}/>
                 <IntegrationRow icon={<Camera size={19}/>} name="Médias d’incident" description="Toute capture doit respecter les permissions et les indicateurs système requis." status="Non activé" good={false}/>
-              </div><div className="info-banner"><CircleHelp size={17}/><div><strong>Aucune commande distante n’est exécutée par cette page.</strong><p>Le relais relaie les commandes autorisées ; l’agent Android doit rester connecté et les permissions requises doivent être accordées.</p></div></div></div>
+              </div><div className="info-banner"><CircleHelp size={17}/><div><strong>Les commandes distantes sont disponibles en mode prototype.</strong><p>Le relais relaie les commandes autorisées ; l’agent Android doit rester connecté et les permissions requises doivent être accordées.</p></div></div></div>
               <div className="panel"><div className="panel-header"><div><h3>Appareil administré</h3><p>Pour un téléphone personnel ou un parc dont tu es l’administrateur.</p></div><ShieldCheck size={19}/></div>
                 <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Android Enterprise — Device Owner</strong><span>À provisionner explicitement pendant la configuration initiale ou après réinitialisation. Peut limiter la désinstallation selon les politiques autorisées.</span></div></div>
                 <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Association et révocation</strong><span>Association visible, clés individuelles et révocation depuis le PC.</span></div></div>
