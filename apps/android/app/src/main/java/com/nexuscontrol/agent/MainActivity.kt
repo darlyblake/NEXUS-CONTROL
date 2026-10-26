@@ -191,7 +191,7 @@ class MainActivity : Activity() {
         if (receiver?.isRunning == true) {
             action("Copier l'adresse et le jeton", "Colle-les dans NEXUS CONTROL sur le PC.") {
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("NEXUS réception", "http://" + localIp() + ":8765\\n" + receiverToken))
+                clipboard.setPrimaryClip(ClipData.newPlainText("NEXUS réception", "http://" + localIp() + ":8765\n" + receiverToken))
                 dialog("Informations copiées", "L'adresse locale et le jeton sont dans le presse-papiers.")
             }
         }
