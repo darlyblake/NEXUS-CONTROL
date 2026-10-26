@@ -119,3 +119,22 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: error
           retention-days: 14
+
+      - name: Setup .NET for NEXUS Agent
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish Windows background agent
+        if: runner.os == 'Windows'
+        run: dotnet publish ../windows/NexusAgent/NexusAgent.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/windows-agent
+
+      - name: Upload Windows agent artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-agent-windows-x64
+          path: apps/desktop/artifacts/windows-agent/**
+          if-no-files-found: error
+          retention-days: 14
