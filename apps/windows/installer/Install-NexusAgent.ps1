@@ -30,8 +30,9 @@ Write-Host ''
 Write-Host 'NEXUS CONTROL Agent Windows' -ForegroundColor Cyan
 Write-Host 'Cet agent fonctionnera comme service Windows et se reconnectera au relais configuré.'
 Write-Host 'Le code d-association autorise ce PC à rejoindre une session NEXUS CONTROL.'
-$consent = Read-Host 'Confirme que tu es autorisé à administrer ce PC et que tu veux associer cet appareil (tape OUI)'
-if ($consent -cne 'OUI') { throw 'Installation annulée : consentement local non confirmé.' }
+$consent = if ($ConfirmRemoteDeployment) { 'OUI' } else { Read-Host 'Confirme que tu es autorisé à administrer ce PC et que tu veux associer cet appareil (tape OUI)' }
+if ($consent -cne 'OUI') { throw 'Installation annulée : consentement non confirmé.' }
+if ($ConfirmRemoteDeployment) { Write-Warning 'Déploiement distant demandé par un administrateur authentifié via SSH. Vérifie que le propriétaire de la machine a autorisé cette opération.' }
 
 if (-not $RelayUrl) { $RelayUrl = Read-Host 'URL HTTPS du relais NEXUS CONTROL' }
 try { $relayUri = [Uri]$RelayUrl } catch { throw 'URL du relais invalide.' }
