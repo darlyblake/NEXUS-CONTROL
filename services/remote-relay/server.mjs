@@ -260,7 +260,7 @@ wss.on("connection", (ws) => {
       let message;
       try { message = JSON.parse(data.toString("utf8")); } catch { return ws.close(4400, "invalid_message"); }
       if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
-      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message"]);
+      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", "device_info", "installed_apps"]);
       if (message.type === "command") {
         if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
             typeof message.commandId !== "string" || message.commandId.length > 100 ||
