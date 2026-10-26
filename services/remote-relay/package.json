@@ -1,0 +1,15 @@
+{
+  "name": "nexus-control-remote-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Temporary-code pairing and authenticated WebSocket relay for NEXUS CONTROL",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
