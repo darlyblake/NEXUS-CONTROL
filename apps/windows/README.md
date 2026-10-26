@@ -35,10 +35,10 @@ Le workflow **Windows Agent** publie également l'artefact `nexus-agent-windows-
 
 1. Depuis Ubuntu, ouvre NEXUS CONTROL → Accès distant.
 2. Saisis l'URL HTTPS/WSS du relais et clique sur **Créer un code d'association**.
-3. Sur Windows, ouvre PowerShell en administrateur et lance l'installateur avec le dossier publié :
+3. Sur Windows, ouvre PowerShell en administrateur dans le dossier de l'artefact téléchargé depuis GitHub Actions (il contient NexusAgent.exe et les scripts). Lance :
 
     Set-ExecutionPolicy -Scope Process Bypass
-    .\apps\windows\installer\Install-NexusAgent.ps1 -PublishDirectory .\artifacts\windows-agent
+    .\Install-NexusAgent.ps1 -PublishDirectory .
 
 4. Confirme localement l'installation, saisis l'URL HTTPS du relais et le code d'association temporaire.
 5. L'installateur te demande séparément si PowerShell distant doit être activé. Appuie sur Entrée pour le laisser désactivé ; tape exactement `ACTIVER` uniquement si tu acceptes ce risque.
