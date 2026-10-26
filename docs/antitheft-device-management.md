@@ -84,3 +84,12 @@ Après l'association, l'agent démarre RemoteAgentService au premier plan et aff
 Le service traite les commandes autorisées suivantes : dernière position connue, démarrage/arrêt de sonnerie et notification du message du propriétaire. Les messages apparaissent comme notifications système ; ils ne sont pas garantis à l'écran verrouillé si les notifications sont désactivées. La localisation est la dernière position connue, pas nécessairement un nouveau relevé GPS.
 
 Limite de plateforme : le service utilise le type dataSync et les restrictions Android modernes sur les services au premier plan s'appliquent. L'économie d'énergie, l'arrêt forcé par l'utilisateur, l'absence de réseau ou la révocation peuvent interrompre le service. Aucun contrôle caméra à distance n'est ajouté.
+
+
+## Inventaire distant en lecture seule
+
+Les commandes **Infos appareil** et **Applications installées** sont disponibles dans l'écran Protection antivol. Elles renvoient respectivement les caractéristiques de base de l'appareil et jusqu'à 80 applications non système visibles par l'application. Android limite la visibilité des paquets selon la version et les déclarations de visibilité : cet inventaire n'est donc pas garanti exhaustif. Ces commandes ne lancent, n'installent ni ne désinstallent aucune application.
+
+## Validation automatique du relais
+
+Le workflow `.github/workflows/relay-tests.yml` lance des tests d'intégration Node.js couvrant le code d'association à usage unique, le relais d'une commande authentifiée et la révocation qui ferme les connexions. Un passage CI réussi ne remplace pas les tests sur un téléphone réel.
