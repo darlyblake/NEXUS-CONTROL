@@ -25,6 +25,7 @@ Le contrôle de santé est disponible sur `http://localhost:8787/health`. Pour u
 2. Le téléphone envoie `POST /api/pair/redeem` avec `{"pairCode":"<code>","deviceId":"android-<identifiant>" }`. Le code ne peut être utilisé qu'une seule fois. La réponse contient le jeton secret du téléphone.
 3. Chaque client ouvre `wss://<hôte>/ws` et envoie immédiatement `{"type":"auth","deviceId":"...","token":"..."}`.
 4. Une fois authentifié, les clients peuvent échanger des messages JSON typés ou des trames binaires. Le relais ne décode pas les commandes ni le contenu des fichiers.
+5. Une association peut être révoquée avec `POST /api/revoke` et l’en-tête `Authorization: Bearer <jeton>` ; cela invalide les deux jetons et ferme les deux connexions.
 
 Les jetons sont secrets : ne pas les mettre dans une URL, un journal, une capture d'écran ou un dépôt Git.
 
@@ -36,6 +37,10 @@ Les jetons sont secrets : ne pas les mettre dans une URL, un journal, une captur
 - Aucun client n'est encore connecté à ce service. Tant que l'intégration Android et desktop n'est pas faite et que le relais n'est pas déployé, aucune session distante réelle ne peut être établie.
 - Le relais ne permet pas de contourner les permissions Android. La capture d'écran nécessite le consentement système ; le contrôle d'interface nécessite que l'utilisateur active volontairement le service d'accessibilité, et certaines actions resteront impossibles.
 
-## Déploiement
+## Déploiement avec Render
+
+Le dépôt contient un `render.yaml` à la racine. Dans Render, crée un **Blueprint** depuis le dépôt NEXUS CONTROL, puis déploie le service `nexus-control-remote-relay`. Une fois le service disponible, ouvre son URL HTTPS et vérifie `/health`. Le plan gratuit peut s’endormir ou redémarrer ; les sessions en mémoire seront alors perdues et il faudra créer un nouveau code.
+
+## Déploiement manuel
 
 Déployer ce dossier comme service Node.js (commande de démarrage `npm start`) sur une plateforme supportant les connexions WebSocket persistantes. Configurer la terminaison TLS/WSS au niveau du proxy ou de la plateforme. Ne pas utiliser une fonction serverless courte pour un relais WebSocket permanent. Après déploiement, vérifier `/health`, les codes expirés/utilisés, l'authentification des deux rôles, la reconnexion et la révocation avant d'utiliser des données réelles.
