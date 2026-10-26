@@ -79,6 +79,35 @@ class RemoteRelayClient(context: Context) {
         })
     }
 
+    fun revoke(onStatus: (String) -> Unit) {
+        Thread {
+            try {
+                val base = prefs.getString("relay_base_url", null)
+                val token = prefs.getString("relay_token", null)
+                if (base.isNullOrBlank() || token.isNullOrBlank()) {
+                    prefs.edit().remove("relay_token").remove("relay_pair_id").apply()
+                    disconnect()
+                    onStatus("Aucun jeton local enregistré.")
+                    return@Thread
+                }
+                val request = Request.Builder().url(base.trimEnd('/') + "/api/revoke")
+                    .header("Authorization", "Bearer " + token)
+                    .post("{}".toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                http.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("Le serveur n'a pas confirmé la révocation (HTTP " + response.code + "). Réessaie quand le relais est accessible.")
+                    }
+                }
+                disconnect()
+                prefs.edit().remove("relay_token").remove("relay_pair_id").remove("relay_base_url").apply()
+                onStatus("Association révoquée côté serveur et jeton local supprimé.")
+            } catch (error: Exception) {
+                onStatus("Révocation impossible : " + (error.message ?: error.javaClass.simpleName))
+            }
+        }.start()
+    }
+
     fun disconnect() {
         socket?.close(1000, "user_disconnect")
         socket = null
