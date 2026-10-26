@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "apps/windows/**"
+      - "apps/desktop/src/**"
+      - "services/remote-relay/**"
       - ".github/workflows/windows-agent.yml"
   pull_request:
     paths:
@@ -16,6 +18,26 @@ permissions:
   contents: read
 
 jobs:
+  validate-shared-protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate relay syntax
+        run: node --check services/remote-relay/server.mjs
+
+      - name: Build NEXUS CONTROL desktop frontend
+        working-directory: apps/desktop
+        run: |
+          npm install
+          npm run build
+
   build:
     runs-on: windows-latest
     steps:
