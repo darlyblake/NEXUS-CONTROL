@@ -8,6 +8,8 @@ Application de bureau open source pour administrer les appareils personnels depu
 - Tableau de bord et navigation en français.
 - Détection locale des outils ADB, scrcpy, Node.js, MeshCentral CLI et WireGuard.
 - Découverte des appareils Android via `adb devices -l`.
+- Application Android : navigation latérale, pages Envoyer/Réception et icône dédiée.
+- Transfert PC → Android par Wi-Fi local : récepteur Android activé manuellement, jeton requis et confirmation de transfert côté PC.
 - Page **Analyse réseau** : découverte d'hôtes du sous-réseau local avec Nmap (`-sn`), arp-scan si disponible, puis ping en secours ; aucun scan de ports n'est lancé par défaut.
 - Page **Sécurité** : bouton d'audit local en lecture seule qui vérifie la présence de Nmap, arp-scan, Netdiscover, TShark, WireGuard et l'état d'UFW sous Linux.
 - Lancement de scrcpy depuis la fiche d'un appareil, après validation qu'il est toujours connecté et autorisé.
