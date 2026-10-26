@@ -136,7 +136,7 @@ function App() {
     } finally { setOpeningRemoteConsole(false); }
   }, [remoteRelayUrl, remoteDeviceId]);
 
-  const sendAntitheftCommand = useCallback((action: "location_request" | "ring_start" | "ring_stop" | "show_message") => {
+  const sendAntitheftCommand = useCallback((action: "location_request" | "ring_start" | "ring_stop" | "show_message" | "device_info" | "installed_apps") => {
     const socket = remoteSocketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       setRemoteCommandResult("Commande non envoyée : connecte le relais et le téléphone.");
@@ -673,6 +673,8 @@ function App() {
                 <button className="button button-primary" onClick={() => sendAntitheftCommand("location_request")}><MapPin size={16}/>Demander la position</button>
                 <button className="button button-secondary" onClick={() => sendAntitheftCommand("ring_start")}><Volume2 size={16}/>Faire sonner</button>
                 <button className="button button-secondary" onClick={() => sendAntitheftCommand("ring_stop")}><Volume2 size={16}/>Arrêter la sonnerie</button>
+                <button className="button button-secondary" onClick={() => sendAntitheftCommand("device_info")}><Smartphone size={16}/>Infos appareil</button>
+                <button className="button button-secondary" onClick={() => sendAntitheftCommand("installed_apps")}><Search size={16}/>Applications installées</button>
               </div>
               <label className="remote-field-label" htmlFor="antitheft-message">Message à afficher dans NEXUS Agent</label>
               <input id="antitheft-message" className="remote-server-input" value={remoteMessage} maxLength={240} onChange={event => setRemoteMessage(event.target.value)} />
