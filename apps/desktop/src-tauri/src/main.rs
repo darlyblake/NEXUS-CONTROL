@@ -471,6 +471,49 @@ fn build_and_install_android() -> Result<String, String> {
         return Err(format!("Le dossier Android ne contient pas les fichiers Gradle attendus : {}", android_dir.display()));
     }
 
+    // Resolve the Android SDK even when the desktop app was launched outside a shell.
+    // Respect an existing valid local.properties first, then environment variables and common Linux paths.
+    let local_properties = android_dir.join("local.properties");
+    let existing_sdk = fs::read_to_string(&local_properties).ok().and_then(|content| {
+        content.lines().find_map(|line| {
+            let line = line.trim();
+            line.strip_prefix("sdk.dir=").map(|value| PathBuf::from(value.trim().replace("\\\\:", ":")))
+        })
+    }).filter(|path| path.join("platform-tools/adb").is_file() || path.join("platforms").is_dir());
+
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let mut sdk_candidates: Vec<PathBuf> = Vec::new();
+    for key in ["ANDROID_HOME", "ANDROID_SDK_ROOT"] {
+        if let Some(value) = std::env::var_os(key) {
+            sdk_candidates.push(PathBuf::from(value));
+        }
+    }
+    if let Some(home) = home {
+        sdk_candidates.push(home.join("Android/Sdk"));
+        sdk_candidates.push(home.join("Android/sdk"));
+    }
+    sdk_candidates.extend([
+        PathBuf::from("/opt/android-sdk"),
+        PathBuf::from("/usr/lib/android-sdk"),
+    ]);
+    let sdk = existing_sdk.or_else(|| sdk_candidates.into_iter().find(|path| {
+        path.join("platforms").is_dir() && (path.join("platform-tools").is_dir() || path.join("build-tools").is_dir())
+    })).ok_or_else(|| {
+        "SDK Android introuvable. Ouvre Android Studio > SDK Manager pour installer le SDK, puis vérifie le chemin. Chemins vérifiés : ANDROID_HOME, ANDROID_SDK_ROOT, ~/Android/Sdk, /opt/android-sdk et /usr/lib/android-sdk.".to_string()
+    })?;
+
+    // Write only the SDK location; preserve any other local.properties entries.
+    let sdk_value = sdk.to_string_lossy().replace("\\\\", "\\\\\\\\").replace(":", "\\\\:");
+    let mut properties = fs::read_to_string(&local_properties).unwrap_or_default();
+    let mut lines: Vec<String> = properties.lines()
+        .filter(|line| !line.trim_start().starts_with("sdk.dir="))
+        .map(str::to_string)
+        .collect();
+    lines.push(format!("sdk.dir={sdk_value}"));
+    properties = lines.join("\\n") + "\\n";
+    fs::write(&local_properties, properties)
+        .map_err(|error| format!("Impossible d'écrire le chemin du SDK dans {} : {error}", local_properties.display()))?;
+
     let build = Command::new(&gradle)
         .arg("assembleDebug")
         .current_dir(&android_dir)
