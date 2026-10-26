@@ -115,6 +115,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Échec de configuration du service (code $LASTEXITCODE)."
 }
 
+# Recover automatically from unexpected service crashes.
+sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
+sc.exe failureflag $serviceName 1 | Out-Null
+
 Start-Service -Name $serviceName
 Get-Service -Name $serviceName | Format-Table Name, Status, StartType
 Write-Host "Appareil associé : $deviceId"
