@@ -9,6 +9,14 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.database.Cursor
+import android.provider.OpenableColumns
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.util.UUID
+import java.io.File
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -22,6 +30,17 @@ class MainActivity : Activity() {
     private val textColor = Color.rgb(239, 244, 255)
     private val muted = Color.rgb(170, 187, 211)
     private lateinit var root: LinearLayout
+    private lateinit var sendTarget: EditText
+    private lateinit var sendToken: EditText
+    private lateinit var transferStatus: TextView
+    private var selectedFile: Uri? = null
+    private var selectedFileName: String = ""
+    private var receiver: LocalTransferServer? = null
+    private val receiverToken: String by lazy {
+        prefs.getString("receiver_token", null) ?: UUID.randomUUID().toString().replace("-", "").also {
+            prefs.edit().putString("receiver_token", it).apply()
+        }
+    }
     private val prefs by lazy { getSharedPreferences("nexus_agent", Context.MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,61 +52,259 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 2001) {
-            val message = if (resultCode == RESULT_OK) {
-                "Autorisation accordée pour cette session. Le flux d'écran n'est pas encore transmis à un ordinateur."
-            } else "Capture annulée : aucune capture n'a été démarrée."
-            dialog("Capture d'écran", message)
+            dialog("Capture d'écran", if (resultCode == RESULT_OK) "Autorisation accordée. Le flux d'écran distant n'est pas encore intégré." else "Capture annulée.")
         } else if (requestCode == 2002 && resultCode == RESULT_OK) {
-            dialog("Fichier sélectionné", "Fichier choisi par l'utilisateur. Le transfert réseau sera disponible après l'intégration du protocole sécurisé.")
+            selectedFile = data?.data
+            selectedFileName = selectedFile?.let { displayName(it) } ?: ""
+            if (::transferStatus.isInitialized) transferStatus.text = if (selectedFile != null) "Fichier choisi : " + selectedFileName else "Aucun fichier choisi."
         }
     }
 
-    private fun buildUi() {
+    private fun buildUi() = showPage("home")
+
+    private fun showPage(page: String) {
+        val frame = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(navy) }
+        val sidebar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(18), dp(8), dp(12))
+            setBackgroundColor(Color.rgb(8, 16, 32))
+            layoutParams = LinearLayout.LayoutParams(dp(136), -1)
+        }
+        sidebar.addView(TextView(this).apply {
+            text = "◈\nNEXUS"
+            gravity = Gravity.CENTER
+            textSize = 19f
+            setTypeface(null, 1)
+            setTextColor(accent)
+            setPadding(0, 0, 0, dp(22))
+        })
+        val menu = listOf(
+            Pair("home", "⌂  Accueil"),
+            Pair("send", "↑  Envoyer"),
+            Pair("receive", "↓  Réception"),
+            Pair("device", "▣  Appareil"),
+            Pair("security", "◇  Sécurité")
+        )
+        menu.forEach { item ->
+            val navItem = TextView(this).apply {
+                text = item.second
+                textSize = 13f
+                setTextColor(if (page == item.first) Color.WHITE else muted)
+                setTypeface(null, if (page == item.first) 1 else 0)
+                setPadding(dp(9), dp(15), dp(3), dp(15))
+                if (page == item.first) setBackgroundColor(panel)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { showPage(item.first) }
+            }
+            val lp = LinearLayout.LayoutParams(-1, -2)
+            lp.bottomMargin = dp(5)
+            sidebar.addView(navItem, lp)
+        }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(22), dp(20), dp(28))
+            setPadding(dp(16), dp(20), dp(16), dp(24))
             setBackgroundColor(navy)
         }
         val scroll = ScrollView(this).apply { addView(root) }
-        setContentView(scroll)
+        frame.addView(sidebar)
+        frame.addView(scroll, LinearLayout.LayoutParams(0, -1, 1f))
+        setContentView(frame)
 
-        label("NEXUS CONTROL", 12f, accent, true)
-        label("NEXUS Agent", 30f, textColor, true)
-        label("Agent Android • accès explicite et révocable", 14f, muted, false)
-        space(18)
-        section("ÉTAT DE L'APPAREIL")
-        card {
-            label("${Build.MANUFACTURER} ${Build.MODEL}", 19f, textColor, true)
-            label("Android ${Build.VERSION.RELEASE} • API ${Build.VERSION.SDK_INT}", 13f, muted, false)
-            label("Réseau local : ${localIp()}", 14f, muted, false)
-            label("État : agent local • aucun contrôleur distant connecté", 13f, Color.rgb(255, 204, 120), false)
+        when (page) {
+            "home" -> {
+                label("NEXUS CONTROL", 12f, accent, true)
+                label("Centre de contrôle", 24f, textColor, true)
+                label("Transferts locaux et gestion de cet appareil.", 13f, muted, false)
+                section("ÉTAT DE L'APPAREIL")
+                card {
+                    label(Build.MANUFACTURER + " " + Build.MODEL, 18f, textColor, true)
+                    label("Android " + Build.VERSION.RELEASE + " • API " + Build.VERSION.SDK_INT, 13f, muted, false)
+                    label("Adresse IP : " + localIp(), 13f, muted, false)
+                    label(if (receiver?.isRunning == true) "Réception : active" else "Réception : arrêtée", 13f, if (receiver?.isRunning == true) Color.rgb(94, 220, 155) else muted, false)
+                }
+                section("ACCÈS RAPIDE")
+                action("↑  Envoyer un fichier", "Vers un récepteur compatible sur le même Wi-Fi.") { showPage("send") }
+                action("↓  Recevoir des fichiers", "Activer le récepteur et afficher son adresse et son jeton.") { showPage("receive") }
+                action("Appareil et autorisations", "Informations Android et autorisations locales.") { showPage("device") }
+            }
+            "send" -> buildSendPage()
+            "receive" -> buildReceivePage()
+            "device" -> buildDevicePage()
+            "security" -> buildSecurityPage()
         }
-        section("FONCTIONS")
-        action("Autoriser la capture d'écran", "Android affichera sa boîte de dialogue système.") {
-            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            @Suppress("DEPRECATION")
-            startActivityForResult(manager.createScreenCaptureIntent(), 2001)
+    }
+
+    private fun buildSendPage() {
+        label("TRANSFERT DE FICHIERS", 12f, accent, true)
+        label("Envoyer", 26f, textColor, true)
+        label("Le destinataire doit activer Réception et être joignable sur le même réseau Wi-Fi.", 13f, muted, false)
+        section("DESTINATAIRE")
+        sendTarget = EditText(this).apply {
+            hint = "http://192.168.1.20:8765"
+            setSingleLine(true); setTextColor(textColor); setHintTextColor(muted)
+            setPadding(dp(12), dp(12), dp(12), dp(12)); setBackgroundColor(panel)
         }
-        action("Choisir un fichier à envoyer", "Ouvre le sélecteur de fichiers Android.") {
+        root.addView(sendTarget, LinearLayout.LayoutParams(-1, -2))
+        space(10)
+        sendToken = EditText(this).apply {
+            hint = "Jeton affiché sur l'appareil destinataire"
+            setSingleLine(true); setTextColor(textColor); setHintTextColor(muted)
+            setPadding(dp(12), dp(12), dp(12), dp(12)); setBackgroundColor(panel)
+        }
+        root.addView(sendToken, LinearLayout.LayoutParams(-1, -2))
+        space(10)
+        action("Choisir un fichier", "Ouvre le sélecteur Android.") {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"; addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             @Suppress("DEPRECATION")
             startActivityForResult(intent, 2002)
         }
-        action("Consulter les applications installées", "Affiche l'inventaire local visible pour cette application.") { showInstalledApps() }
-        action("Gérer les autorisations Android", "Ouvre les paramètres de cette application.") {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(android.net.Uri.parse("package:$packageName")))
+        transferStatus = TextView(this).apply {
+            text = if (selectedFile != null) "Fichier choisi : " + selectedFileName else "Aucun fichier sélectionné."
+            textSize = 13f; setTextColor(muted); setPadding(0, dp(8), 0, dp(12))
         }
-        action("Autoriser les fonctions d'accessibilité", "Activation manuelle dans les paramètres Android. Le service reste inactif dans cette version.") {
+        root.addView(transferStatus)
+        action("Envoyer maintenant", "Envoie le fichier après validation du jeton.") { sendSelectedFile() }
+        section("LIMITE")
+        label("Ce transfert fonctionne sur le réseau local. Le protocole Internet sécurisé de NEXUS CONTROL reste à développer.", 12f, muted, false)
+    }
+
+    private fun buildReceivePage() {
+        label("TRANSFERT DE FICHIERS", 12f, accent, true)
+        label("Réception", 26f, textColor, true)
+        label("Active cette page pour recevoir un fichier d'un appareil compatible sur le même réseau.", 13f, muted, false)
+        section("RÉCEPTEUR")
+        card {
+            label(if (receiver?.isRunning == true) "● Récepteur actif" else "○ Récepteur arrêté", 17f, if (receiver?.isRunning == true) Color.rgb(94, 220, 155) else Color.rgb(255, 190, 100), true)
+            if (receiver?.isRunning == true) {
+                label("Adresse : http://" + localIp() + ":8765", 13f, textColor, true)
+                label("Jeton : " + receiverToken, 12f, muted, false)
+            } else {
+                label("Démarre la réception pour afficher l'adresse et le jeton.", 13f, muted, false)
+            }
+        }
+        action(if (receiver?.isRunning == true) "Arrêter la réception" else "Démarrer la réception", "Le serveur n'est actif que lorsque tu l'as démarré.") {
+            if (receiver?.isRunning == true) {
+                receiver?.stop()
+                receiver = null
+                showPage("receive")
+            } else {
+                try {
+                    receiver = LocalTransferServer(this, receiverToken) { file ->
+                        runOnUiThread { dialog("Fichier reçu", "Fichier enregistré : " + file.name) }
+                    }.also { it.start() }
+                    showPage("receive")
+                } catch (error: Exception) {
+                    dialog("Erreur de réception", error.message ?: "Impossible de démarrer le récepteur.")
+                }
+            }
+        }
+        section("FICHIERS REÇUS")
+        val dir = File(getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "NexusReceived")
+        val files = dir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        if (files.isEmpty()) label("Aucun fichier reçu pour le moment.", 13f, muted, false)
+        files.forEach { file ->
+            card {
+                label(file.name, 14f, textColor, true)
+                label(file.length().toString() + " octets", 12f, muted, false)
+            }
+        }
+        section("SÉCURITÉ")
+        label("Utilise uniquement un Wi-Fi de confiance. Le transfert local est protégé par un jeton mais n'utilise pas HTTPS. Arrête la réception après usage.", 12f, muted, false)
+    }
+
+    private fun buildDevicePage() {
+        label("APPAREIL", 12f, accent, true)
+        label("Informations et autorisations", 23f, textColor, true)
+        section("IDENTITÉ")
+        card {
+            label(Build.MANUFACTURER + " " + Build.MODEL, 18f, textColor, true)
+            label("Android " + Build.VERSION.RELEASE + " • API " + Build.VERSION.SDK_INT, 13f, muted, false)
+            label("Adresse IP : " + localIp(), 13f, muted, false)
+        }
+        action("Autoriser la capture d'écran", "Android demande confirmation ; le flux distant n'est pas encore intégré.") {
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            @Suppress("DEPRECATION")
+            startActivityForResult(manager.createScreenCaptureIntent(), 2001)
+        }
+        action("Applications installées", "Affiche les applications locales visibles.") { showInstalledApps() }
+        action("Paramètres de l'application", "Gérer les autorisations Android.") {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(android.net.Uri.parse("package:" + packageName)))
+        }
+        action("Paramètres d'accessibilité", "Activation manuelle uniquement.") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         section("APPAREILS DE CONFIANCE")
-        label("Liste locale enregistrée sur ce téléphone. Elle ne remplace pas l'authentification réseau.", 13f, muted, false)
-        action("Ajouter un appareil de confiance", "Enregistre un nom et un identifiant fournis par le propriétaire.") { addTrustedDevice() }
+        label("Liste locale indicative ; elle ne remplace pas l'authentification réseau.", 12f, muted, false)
+        action("Ajouter un appareil", "Enregistrer un nom et un identifiant localement.") { addTrustedDevice() }
         renderTrustedDevices()
-        section("SÉCURITÉ")
-        label("• Pas d'accès caché ni d'autorisation silencieuse\n• La capture exige l'accord Android\n• Les accès enregistrés peuvent être révoqués\n• Connexion USB/Wi-Fi et relais distant : intégration réseau à venir", 14f, muted, false)
+    }
+
+    private fun buildSecurityPage() {
+        label("SÉCURITÉ", 12f, accent, true)
+        label("Contrôle et confidentialité", 23f, textColor, true)
+        section("PRINCIPES")
+        card {
+            label("• Pas de capture silencieuse", 14f, textColor, true)
+            label("• Réception activée manuellement", 13f, muted, false)
+            label("• Jeton de réception privé", 13f, muted, false)
+            label("• Arrêter le serveur après le transfert", 13f, muted, false)
+        }
+        action("Gérer les appareils de confiance", "Ouvrir les paramètres de l'appareil.") { showPage("device") }
+    }
+
+    private fun displayName(uri: Uri): String {
+        var name = "fichier"
+        val cursor: Cursor? = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        cursor?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
+        return name.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(120).ifBlank { "fichier" }
+    }
+
+    private fun sendSelectedFile() {
+        val uri = selectedFile
+        if (uri == null) { dialog("Fichier manquant", "Choisis d'abord un fichier."); return }
+        val base = sendTarget.text.toString().trim().trimEnd('/')
+        val token = sendToken.text.toString().trim()
+        if (!base.startsWith("http://") || token.isBlank()) {
+            dialog("Destinataire incomplet", "Saisis l'adresse http:// du récepteur et son jeton.")
+            return
+        }
+        transferStatus.text = "Envoi en cours…"
+        Thread {
+            try {
+                val size = contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
+                    if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else -1L
+                } ?: -1L
+                if (size < 0) throw IllegalStateException("Taille du fichier indisponible.")
+                val encoded = URLEncoder.encode(selectedFileName, "UTF-8")
+                val connection = (URL(base + "/upload?name=" + encoded).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"
+                    connectTimeout = 10000
+                    readTimeout = 120000
+                    doOutput = true
+                    setRequestProperty("Authorization", "Bearer " + token)
+                    setRequestProperty("Content-Type", "application/octet-stream")
+                    setFixedLengthStreamingMode(size)
+                }
+                val input = contentResolver.openInputStream(uri) ?: throw IllegalStateException("Impossible de lire le fichier.")
+                input.use { stream -> connection.outputStream.use { output -> stream.copyTo(output) } }
+                val code = connection.responseCode
+                connection.disconnect()
+                val message = if (code in 200..299) "Transfert terminé : " + selectedFileName else "Échec HTTP " + code + ". Vérifie l'adresse, le jeton et le Wi-Fi."
+                runOnUiThread { transferStatus.text = message }
+            } catch (error: Exception) {
+                runOnUiThread { transferStatus.text = "Échec : " + (error.message ?: error.javaClass.simpleName) }
+            }
+        }.start()
+    }
+
+    override fun onDestroy() {
+        receiver?.stop()
+        receiver = null
+        super.onDestroy()
     }
 
     private fun showInstalledApps() {
