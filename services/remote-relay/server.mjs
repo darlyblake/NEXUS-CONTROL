@@ -128,7 +128,7 @@ const server = createServer(async (req, res) => {
     const expiresAt = Date.now() + PAIR_TTL_MS;
     pairings.set(code, { pairId, desktopDeviceId, expiresAt, redeemed: false });
     targetRoles.set(pairId, "android");
-    tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", targetRole: "android", expiresAt: Date.now() + 12 * 60 * 60 * 1000 });
+    tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", targetRole: "android", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
     return json(res, 201, {
       protocol: 1,
       pairId,
@@ -187,7 +187,7 @@ const server = createServer(async (req, res) => {
     }
     pairing.redeemed = true;
     const deviceToken = randomToken();
-    const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
     const role = platform;
     targetRoles.set(pairing.pairId, role);
     for (const record of tokens.values()) {
