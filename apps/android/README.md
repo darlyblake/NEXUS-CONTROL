@@ -30,3 +30,13 @@ Le transfert Wi-Fi utilise un récepteur HTTP local sur le port 8765 et un jeton
 Cette application ne constitue pas encore un système complet de contrôle distant. Le transfert Wi-Fi est local uniquement ; le contrôle multiplateforme par Internet nécessite un relais sécurisé, l'authentification des appareils, TLS, des jetons de session à durée limitée et un protocole partagé avec le client de bureau. Screen capture uses Android's system consent dialog; Android does not allow silent capture. Full touch control is not enabled by this scaffold: the declared Accessibility service is inert until a reviewed, authenticated session protocol is implemented. App inventory visibility is subject to Android/Google Play policy.
 
 Trusted devices are stored locally on this phone and can be removed by the user. This local list alone is not proof of identity to a server; do not treat it as a completed authentication system.
+
+
+## Association distante expérimentale
+
+1. Déploie le service décrit dans `services/remote-relay/README.md` derrière HTTPS/WSS.
+2. Dans NEXUS CONTROL sur le PC, ouvre **Accès distant**, saisis l’URL publique du relais et crée un code temporaire.
+3. Dans NEXUS Agent, ouvre **Distant**, saisis la même URL et le code affiché sur le PC, puis touche **Associer et connecter**.
+4. Garde les deux applications ouvertes pendant ce test. La connexion indique la présence des deux clients, mais les commandes de fichiers et le contrôle d’écran par Internet ne sont pas encore implémentés.
+
+Le jeton Android est conservé dans les préférences privées de l’application. Cette première version n’a pas encore de stockage sécurisé dédié, de service de connexion en arrière-plan ni de mécanisme complet de révocation serveur. Ne l’utilise pas avec des données sensibles avant ces étapes.
