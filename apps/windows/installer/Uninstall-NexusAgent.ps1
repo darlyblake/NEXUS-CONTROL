@@ -10,7 +10,7 @@ $configPath = Join-Path $configDirectory 'agent.json'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Ouvre PowerShell en tant qu’administrateur pour désinstaller le service.'
+    throw 'Ouvre PowerShell en tant qu-administrateur pour désinstaller le service.'
 }
 
 if (-not $PSCmdlet.ShouldProcess($serviceName, 'Arrêter et supprimer le service NEXUS CONTROL Agent')) {
@@ -43,4 +43,4 @@ if (Test-Path -LiteralPath $configDirectory) {
 }
 
 Write-Host 'Le service et les identifiants locaux ont été supprimés.'
-Write-Host "Les fichiers du programme restent dans $installDirectory pour inspection ; supprime ce dossier manuellement si tu n’en as plus besoin."
+Write-Host "Les fichiers du programme restent dans $installDirectory pour inspection ; supprime ce dossier manuellement si tu n-en as plus besoin."
