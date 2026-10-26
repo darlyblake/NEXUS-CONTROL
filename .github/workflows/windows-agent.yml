@@ -74,6 +74,12 @@ jobs:
       - name: Publish self-contained Windows x64 agent
         run: dotnet publish apps/windows/NexusAgent/NexusAgent.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/windows-agent
 
+      - name: Package installer scripts and instructions
+        shell: pwsh
+        run: |
+          Copy-Item apps/windows/installer/*.ps1 artifacts/windows-agent/
+          Copy-Item apps/windows/README.md artifacts/windows-agent/README-agent.md
+
       - name: Upload Windows agent
         uses: actions/upload-artifact@v4
         with:
