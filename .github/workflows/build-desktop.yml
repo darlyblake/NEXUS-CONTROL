@@ -59,15 +59,15 @@ jobs:
           import zlib
           from pathlib import Path
 
-          width = height = 128
+          width = height = 512
           rows = []
           for y in range(height):
               row = bytearray([0])
               for x in range(width):
                   # Dark navy background and a simple white N.
                   inside_n = (
-                      (20 <= x < 36 and 24 <= y < 104)
-                      or (92 <= x < 108 and 24 <= y < 104)
+                      (80 <= x < 144 and 96 <= y < 416)
+                      or (368 <= x < 432 and 96 <= y < 416)
                       or (
                           36 <= x < 93
                           and 24 <= y < 104
