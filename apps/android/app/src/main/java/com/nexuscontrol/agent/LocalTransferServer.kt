@@ -57,6 +57,12 @@ class LocalTransferServer(
     private fun handle(socket: Socket) {
         socket.use { client ->
             client.soTimeout = 120_000
+            val remoteIp = client.inetAddress
+            if (remoteIp !is java.net.Inet4Address || !(remoteIp.isSiteLocalAddress || remoteIp.isLinkLocalAddress)) {
+                val denied = BufferedOutputStream(client.getOutputStream())
+                respond(denied, 403, "Forbidden", "Private local network only")
+                return
+            }
             val input = client.getInputStream()
             val output = BufferedOutputStream(client.getOutputStream())
             try {
