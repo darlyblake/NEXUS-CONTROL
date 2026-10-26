@@ -17,6 +17,10 @@ Application de bureau open source pour administrer les appareils personnels depu
 
 La page Sécurité fournit un audit local de présence des outils, pas un audit de vulnérabilités. La page Analyse réseau fait une découverte d'hôtes sur le réseau local, pas un scan de ports. La page Accès distant est une première étape : elle ouvre une console MeshCentral déjà déployée, mais ne crée pas encore les invitations ni ne gère les sessions directement. Le serveur public, les agents distants, l’authentification et les permissions doivent être configurés et testés. Le contrôle Android via Internet, les scripts, les automatisations, Android TV, Home Assistant et la gestion Apple restent à intégrer.
 
+## Accès distant Android
+
+Voir [le guide des outils de contrôle Android à distance](docs/android-remote-access.md) pour comparer RustDesk, MeshCentral et scrcpy et comprendre leurs limites. La page **Transfert de fichiers** de l'application de bureau permet désormais d'envoyer/récupérer des fichiers via ADB avec un téléphone autorisé ; elle ne remplace pas un relais sécurisé Internet.
+
 ## Architecture
 
 - **Tauri 2 + React + TypeScript** : application de bureau multiplateforme.
