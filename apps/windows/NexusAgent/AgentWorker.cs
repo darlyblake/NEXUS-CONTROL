@@ -16,6 +16,9 @@ internal sealed record AgentConfig(string RelayUrl, string DeviceId, string Devi
 public sealed class AgentWorker : BackgroundService
 {
     private readonly ILogger<AgentWorker> _logger;
+    private readonly HashSet<string> _processedCommands = new();
+    private readonly Queue<string> _processedOrder = new();
+    private readonly object _commandLock = new();
     private readonly string _configPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "NEXUS CONTROL", "Agent", "agent.json");
@@ -120,6 +123,17 @@ public sealed class AgentWorker : BackgroundService
             _logger.LogWarning("Rejected invalid or stale remote command.");
             return;
         }
+        lock (_commandLock)
+        {
+            if (!_processedCommands.Add(commandId))
+            {
+                _logger.LogWarning("Rejected duplicate remote command {CommandId}.", commandId);
+                return;
+            }
+            _processedOrder.Enqueue(commandId);
+            while (_processedOrder.Count > 2000)
+                _processedCommands.Remove(_processedOrder.Dequeue());
+        }
 
         bool ok = false;
         string detail = "";
@@ -186,6 +200,7 @@ public sealed class AgentWorker : BackgroundService
             _logger.LogWarning(ex, "Remote action {Action} failed.", action);
         }
 
+        _logger.LogInformation("Remote command {CommandId} action {Action} completed with success={Success}.", commandId, action, ok);
         await SendJsonAsync(socket, new
         {
             type = "command_result",
