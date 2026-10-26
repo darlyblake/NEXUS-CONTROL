@@ -84,3 +84,10 @@ Pour compiler sur Ubuntu, consulte le [guide Android](apps/android/README.md). G
 ## Relais distant expérimental
 
 Le premier service de relais et les étapes de configuration sont décrits dans [services/remote-relay/README.md](services/remote-relay/README.md). Cette version sert à tester l’association et la présence des clients ; elle ne doit pas être considérée comme un système complet de contrôle distant.
+
+
+## Agent Windows (fondation native)
+
+Le service Windows natif est en cours d'intégration dans [apps/windows](apps/windows/README.md). Il se compile depuis ce même dépôt et est conçu pour démarrer en arrière-plan après installation. Le workflow **Windows Agent** produit un artefact x64 pour les tests.
+
+Cette fondation n'est pas encore un agent de contrôle distant : elle n'ouvre aucun port réseau et n'exécute pas de commandes reçues. L'association, le consentement local, le relais commun, la découverte d'appareils et le contrôle distant doivent être implémentés et validés avant d'activer ces capacités. Une détection réseau ne doit jamais déclencher une installation sans authentification et approbation sur l'appareil cible.

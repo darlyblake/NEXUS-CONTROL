@@ -2,6 +2,7 @@ name: Build desktop installers
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
@@ -58,19 +59,19 @@ jobs:
           import zlib
           from pathlib import Path
 
-          width = height = 128
+          width = height = 512
           rows = []
           for y in range(height):
               row = bytearray([0])
               for x in range(width):
                   # Dark navy background and a simple white N.
                   inside_n = (
-                      (20 <= x < 36 and 24 <= y < 104)
-                      or (92 <= x < 108 and 24 <= y < 104)
+                      (80 <= x < 144 and 96 <= y < 416)
+                      or (368 <= x < 432 and 96 <= y < 416)
                       or (
-                          36 <= x < 93
-                          and 24 <= y < 104
-                          and abs((x - 36) - (y - 24) * 56 / 80) < 8
+                          144 <= x < 372
+                          and 96 <= y < 416
+                          and abs((x - 144) - (y - 96) * 224 / 320) < 32
                       )
                   )
                   row.extend((245, 248, 255, 255) if inside_n else (15, 28, 52, 255))
@@ -90,9 +91,9 @@ jobs:
           png += chunk(b"IHDR", struct.pack("!2I5B", width, height, 8, 6, 0, 0, 0))
           png += chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
           png += chunk(b"IEND", b"")
-          Path("/tmp/nexus-control-icon.png").write_bytes(png)
+          Path("nexus-control-icon.png").write_bytes(png)
           PY
-          npx tauri icon /tmp/nexus-control-icon.png --output src-tauri/icons
+          npx tauri icon nexus-control-icon.png --output src-tauri/icons
 
       - name: Build native desktop application
         run: npm run tauri:build
@@ -117,5 +118,31 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
             apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Setup .NET for NEXUS Agent
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish Windows background agent
+        if: runner.os == 'Windows'
+        run: dotnet publish ../windows/NexusAgent/NexusAgent.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/windows-agent
+
+      - name: Package installer scripts and instructions
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item ../windows/installer/*.ps1 artifacts/windows-agent/
+          Copy-Item ../windows/README.md artifacts/windows-agent/README-agent.md
+
+      - name: Upload Windows agent artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-agent-windows-x64
+          path: apps/desktop/artifacts/windows-agent/**
           if-no-files-found: error
           retention-days: 14

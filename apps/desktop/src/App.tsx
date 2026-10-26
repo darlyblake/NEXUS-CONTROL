@@ -83,6 +83,8 @@ function App() {
   const [remoteDesktopToken, setRemoteDesktopToken] = useState("");
   const [remoteRelayStatus, setRemoteRelayStatus] = useState("Non connecté");
   const [remoteCommandResult, setRemoteCommandResult] = useState("Aucune commande envoyée.");
+  const [remotePeerRole, setRemotePeerRole] = useState<"android" | "windows" | null>(null);
+  const [remotePowerShellScript, setRemotePowerShellScript] = useState("Get-ComputerInfo | Select-Object CsName, WindowsProductName, OsVersion");
   const [remoteLastLocation, setRemoteLastLocation] = useState<{ latitude: number; longitude: number; accuracyMeters?: number; locationTime?: number; provider?: string } | null>(null);
   const [remoteMessage, setRemoteMessage] = useState("Téléphone perdu. Merci de contacter son propriétaire.");
   const [remoteDeviceId] = useState(() => "pc-" + (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
@@ -116,11 +118,15 @@ function App() {
       socket.onopen = () => socket.send(JSON.stringify({ type: "auth", deviceId: remoteDeviceId, token: data.desktopToken }));
       socket.onmessage = (event) => {
         try {
-          const message = JSON.parse(String(event.data)) as { type?: string; role?: string; connected?: boolean; action?: string; ok?: boolean; detail?: string; latitude?: number; longitude?: number; accuracyMeters?: number; locationTime?: number; provider?: string };
-          if (message.type === "authenticated") setRemoteRelayStatus("Relais connecté — en attente du téléphone");
-          if (message.type === "peer_status") setRemoteRelayStatus(message.connected ? "Téléphone connecté" : "En attente du téléphone");
+          const message = JSON.parse(String(event.data)) as { type?: string; role?: string; connected?: boolean; action?: string; ok?: boolean; detail?: string; output?: string; latitude?: number; longitude?: number; accuracyMeters?: number; locationTime?: number; provider?: string };
+          if (message.type === "authenticated") setRemoteRelayStatus("Relais authentifié — en attente de l’appareil cible");
+          if (message.type === "peer_status") {
+            if (message.connected && (message.role === "windows" || message.role === "android")) setRemotePeerRole(message.role);
+            if (!message.connected && (message.role === "windows" || message.role === "android")) setRemotePeerRole(null);
+            setRemoteRelayStatus(message.connected ? (message.role === "windows" ? "Agent Windows connecté" : message.role === "android" ? "Agent Android connecté" : "Contrôleur connecté") : "En attente de l’appareil cible");
+          }
           if (message.type === "command_result") {
-            setRemoteCommandResult((message.action || "Commande") + " : " + (message.ok ? "réussie" : "échec") + (message.detail ? " — " + message.detail : ""));
+            setRemoteCommandResult((message.action || "Commande") + " : " + (message.ok ? "réussie" : "échec") + (message.detail ? " — " + message.detail : "") + (message.output ? "\n" + message.output : ""));
             if (message.action === "location_request" && message.ok && typeof message.latitude === "number" && typeof message.longitude === "number") {
               setRemoteLastLocation({ latitude: message.latitude, longitude: message.longitude, accuracyMeters: message.accuracyMeters, locationTime: message.locationTime, provider: message.provider });
             }
@@ -129,7 +135,7 @@ function App() {
       };
       socket.onerror = () => setRemoteRelayStatus("Erreur de connexion au relais");
       socket.onclose = () => setRemoteRelayStatus("Déconnecté du relais");
-      setNotice("Code d'association créé. Saisis-le dans NEXUS Agent sur le téléphone avant son expiration.");
+      setNotice("Code d’association créé. Saisis-le dans l’agent de l’appareil cible (Windows ou Android) avant son expiration.");
     } catch (error) {
       setRemoteRelayStatus("Association indisponible");
       setNotice("Impossible de joindre le relais : " + String(error));
@@ -149,6 +155,30 @@ function App() {
     socket.send(JSON.stringify(command));
     setRemoteCommandResult("Commande envoyée : " + action + ". En attente de l'accusé de réception…");
   }, [remoteMessage]);
+
+
+  const sendWindowsCommand = useCallback((action: "windows_status" | "windows_list_processes" | "windows_run_powershell") => {
+    const socket = remoteSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN || remotePeerRole !== "windows") {
+      setRemoteCommandResult("Commande non envoyée : associe et connecte un agent Windows.");
+      return;
+    }
+    const commandId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now());
+    const command: { type: string; action: string; commandId: string; timestamp: number; script?: string } = {
+      type: "command", action, commandId, timestamp: Date.now()
+    };
+    if (action === "windows_run_powershell") {
+      const script = remotePowerShellScript.trim();
+      if (!script || script.length > 8000) {
+        setRemoteCommandResult("Le script doit contenir entre 1 et 8000 caractères.");
+        return;
+      }
+      if (!window.confirm("Exécuter ce script PowerShell sur l’ordinateur Windows associé ? S’il est activé sur la cible, il s’exécutera avec les droits du service Windows, potentiellement SYSTEM.")) return;
+      command.script = script;
+    }
+    socket.send(JSON.stringify(command));
+    setRemoteCommandResult("Commande envoyée : " + action + ". En attente du résultat de l’agent…");
+  }, [remotePeerRole, remotePowerShellScript]);
 
   useEffect(() => () => { remoteSocketRef.current?.close(); }, []);
 
@@ -523,12 +553,24 @@ function App() {
               <div className="network-hero-copy"><h2>Connecter tous tes appareils</h2><p>NEXUS CONTROL vise les connexions PC ↔ PC, PC ↔ Android, PC ↔ iPhone/iPad et les connexions mobiles compatibles. Le contrôleur et l’appareil distant peuvent être de types différents ; les fonctions disponibles dépendent du système et des autorisations. Configure ici le serveur sécurisé pour les appareils compatibles. Aucun port entrant n’est ouvert sur cet ordinateur.</p></div>
             </div>
             <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Relier le téléphone par Internet</h3><p>Association temporaire entre ce PC et NEXUS Agent, même si les appareils ne partagent pas le Wi-Fi.</p></div><span className="count-pill">MVP</span></div>
+              <div className="panel-header"><div><h3>Relier un appareil par Internet</h3><p>Association temporaire entre ce PC et un agent NEXUS CONTROL Windows ou Android, même si les appareils ne partagent pas le Wi-Fi.</p></div><span className="count-pill">MVP</span></div>
               <label className="remote-field-label" htmlFor="nexus-relay-url">URL HTTPS du relais NEXUS</label>
               <input id="nexus-relay-url" className="remote-server-input" type="url" placeholder="https://relais.ton-domaine.tld" value={remoteRelayUrl} onChange={event => setRemoteRelayUrl(event.target.value)} />
               <div className="heading-actions remote-actions"><button className="button button-primary" disabled={!remoteRelayUrl.trim() || openingRemoteConsole} onClick={() => void createRemotePair()}><Link2 size={16}/>{openingRemoteConsole ? "Connexion…" : "Créer un code d'association"}</button></div>
-              {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur le téléphone dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
+              {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur l’appareil cible dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
               <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
+              {remotePeerRole === "windows" && <div className="panel device-panel">
+                <div className="panel-header"><div><h3>Contrôle Windows</h3><p>Commandes envoyées uniquement à l’agent Windows authentifié dans cette association.</p></div><Terminal size={20}/></div>
+                <div className="heading-actions remote-actions">
+                  <button className="button button-secondary" onClick={() => sendWindowsCommand("windows_status")}><Monitor size={16}/>État du PC</button>
+                  <button className="button button-secondary" onClick={() => sendWindowsCommand("windows_list_processes")}><Activity size={16}/>Lister les processus</button>
+                </div>
+                <label className="remote-field-label" htmlFor="windows-powershell-script">Script PowerShell (limite 8000 caractères)</label>
+                <textarea id="windows-powershell-script" className="remote-server-input" rows={6} value={remotePowerShellScript} onChange={event => setRemotePowerShellScript(event.target.value)} spellCheck={false}/>
+                <div className="heading-actions remote-actions"><button className="button button-primary" onClick={() => sendWindowsCommand("windows_run_powershell")}><Terminal size={16}/>Exécuter sur Windows</button></div>
+                <p className="remote-description">PowerShell distant doit avoir été activé explicitement pendant l’installation sur Windows. Il s’exécute avec l’identité du service et peut être privilégié. Ne l’utilise que sur un appareil que tu administres.</p>
+                <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Résultat</strong><span style={{ whiteSpace: "pre-wrap" }}>{remoteCommandResult}</span></div></div>
+              </div>}
               {remoteDesktopToken && <div className="heading-actions remote-actions"><button className="button button-secondary" onClick={() => {
                 const base = remoteRelayUrl.trim().replace(/\/$/, "");
                 void fetch(base + "/api/revoke", { method: "POST", headers: { "authorization": "Bearer " + remoteDesktopToken } })

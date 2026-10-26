@@ -27,6 +27,10 @@ La matrice est une cible produit, pas une déclaration que toutes les fonctions 
 6. **Journal d’audit** : appareil source, appareil cible, utilisateur, heure, autorisations et opérations effectuées.
 7. **Découverte locale séparée de l’accès distant** : scanner le réseau local aide à repérer les appareils, mais ne donne pas automatiquement le droit ni la capacité de les contrôler.
 
+## Agent Windows natif — fondation ajoutée
+
+Le projet initial `apps/windows/NexusAgent` est un Worker .NET configuré comme service Windows, avec démarrage automatique après installation et scripts explicites d'installation/désinstallation. Le workflow Windows Agent compile et publie l'artefact x64. À ce stade, le service est volontairement inactif côté réseau : il n'accepte pas de commandes distantes. L'association, l'approbation sur la machine cible, la découverte sécurisée et le protocole commun restent à implémenter.
+
 ## État connu de l’implémentation actuelle
 
 - L’application de bureau Tauri/React existe.

@@ -17,6 +17,7 @@ const pairings = new Map();
 const tokens = new Map();
 const rateLimits = new Map();
 const socketsByPair = new Map();
+const targetRoles = new Map();
 
 function randomToken(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
@@ -94,6 +95,10 @@ function cleanupExpired() {
     if (recent.length) rateLimits.set(key, recent);
     else rateLimits.delete(key);
   }
+  const activePairIds = new Set([...tokens.values()].map((token) => token.pairId));
+  for (const pairId of targetRoles.keys()) {
+    if (!activePairIds.has(pairId)) targetRoles.delete(pairId);
+  }
 }
 const cleanupTimer = setInterval(cleanupExpired, 30_000);
 cleanupTimer.unref();
@@ -126,7 +131,8 @@ const server = createServer(async (req, res) => {
     const desktopToken = randomToken();
     const expiresAt = Date.now() + PAIR_TTL_MS;
     pairings.set(code, { pairId, desktopDeviceId, expiresAt, redeemed: false });
-    tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", expiresAt: Date.now() + 12 * 60 * 60 * 1000 });
+    targetRoles.set(pairId, "android");
+    tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", targetRole: "android", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
     return json(res, 201, {
       protocol: 1,
       pairId,
@@ -157,6 +163,7 @@ const server = createServer(async (req, res) => {
       }
       socketsByPair.delete(pairId);
     }
+    targetRoles.delete(pairId);
     return json(res, 200, { ok: true, revoked: true });
   }
   if (req.method === "POST" && url.pathname === "/api/pair/redeem") {
@@ -171,6 +178,7 @@ const server = createServer(async (req, res) => {
     if (!body) return;
     const code = typeof body.pairCode === "string" ? body.pairCode.trim().toUpperCase() : "";
     const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : "";
+    const platform = body.platform === "windows" ? "windows" : "android";
     if (!/^[A-HJ-NP-Z2-9]{10}$/.test(code) || !/^[a-zA-Z0-9._:-]{3,100}$/.test(deviceId)) {
       return json(res, 400, { error: "invalid_pairing_data" });
     }
@@ -182,10 +190,15 @@ const server = createServer(async (req, res) => {
       return json(res, 400, { error: "same_device_id" });
     }
     pairing.redeemed = true;
-    const androidToken = randomToken();
-    const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
-    tokens.set(hash(androidToken), { pairId: pairing.pairId, deviceId, role: "android", expiresAt });
-    return json(res, 200, { protocol: 1, pairId: pairing.pairId, deviceToken: androidToken, expiresAt: new Date(expiresAt).toISOString() });
+    const deviceToken = randomToken();
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const role = platform;
+    targetRoles.set(pairing.pairId, role);
+    for (const record of tokens.values()) {
+      if (record.pairId === pairing.pairId && record.role === "desktop") record.targetRole = role;
+    }
+    tokens.set(hash(deviceToken), { pairId: pairing.pairId, deviceId, role, expiresAt });
+    return json(res, 200, { protocol: 1, pairId: pairing.pairId, deviceToken, role, expiresAt: new Date(expiresAt).toISOString() });
   }
   if (req.method === "GET" && url.pathname === "/") {
     return json(res, 200, { service: "NEXUS CONTROL remote relay", protocol: 1, health: "/health" });
@@ -235,7 +248,7 @@ wss.on("connection", (ws) => {
       peers.set(identity.role, ws);
       socketsByPair.set(identity.pairId, peers);
       ws.send(JSON.stringify({ type: "authenticated", protocol: 1, pairId: identity.pairId, role: identity.role }));
-      const otherRole = identity.role === "desktop" ? "android" : "desktop";
+      const otherRole = identity.role === "desktop" ? (targetRoles.get(identity.pairId) || identity.targetRole || "android") : "desktop";
       const other = peers.get(otherRole);
       if (other && other.readyState === WebSocket.OPEN) {
         other.send(JSON.stringify({ type: "peer_status", role: identity.role, connected: true }));
@@ -260,17 +273,25 @@ wss.on("connection", (ws) => {
       let message;
       try { message = JSON.parse(data.toString("utf8")); } catch { return ws.close(4400, "invalid_message"); }
       if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
-      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message"]);
+      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", "windows_status", "windows_list_processes", "windows_run_powershell"]);
       if (message.type === "command") {
+        const windowsAction = typeof message.action === "string" && message.action.startsWith("windows_");
+        const targetRole = targetRoles.get(identity.pairId) || "android";
         if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
+            (windowsAction && targetRole !== "windows") || (!windowsAction && targetRole === "windows") ||
             typeof message.commandId !== "string" || message.commandId.length > 100 ||
             typeof message.timestamp !== "number" || Math.abs(Date.now() - message.timestamp) > 60_000 ||
-            (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240))) {
+            (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240)) ||
+            (message.action === "windows_run_powershell" && (typeof message.script !== "string" || message.script.trim().length < 1 || message.script.length > 8000))) {
           return ws.close(4403, "invalid_or_unauthorized_command");
         }
       } else if (message.type === "command_result") {
-        if (identity.role !== "android" || !allowedActions.has(message.action) ||
-            typeof message.commandId !== "string" || message.commandId.length > 100) {
+        const windowsResult = typeof message.action === "string" && message.action.startsWith("windows_");
+        if (identity.role === "desktop" || !allowedActions.has(message.action) ||
+            (identity.role === "windows" && !windowsResult) || (identity.role === "android" && windowsResult) ||
+            typeof message.commandId !== "string" || message.commandId.length > 100 ||
+            (typeof message.detail === "string" && message.detail.length > 2000) ||
+            (typeof message.output === "string" && message.output.length > 12000)) {
           return ws.close(4403, "invalid_or_unauthorized_result");
         }
       }
