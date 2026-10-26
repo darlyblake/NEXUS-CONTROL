@@ -11,7 +11,7 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class RemoteRelayClient(context: Context) {
+class RemoteRelayClient(private val context: Context) {
     private val prefs = context.getSharedPreferences("nexus_agent", Context.MODE_PRIVATE)
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
