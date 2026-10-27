@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { invoke } from "@tauri-apps/api/core";
 import { ScreenSharePanel } from "./components/ScreenSharePanel";
 import { LocalAIChat } from "./components/LocalAIChat";
+import { LocalAIAgent } from "./components/LocalAIAgent";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
@@ -36,7 +37,7 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
-  assistant: { title: "Assistant IA", subtitle: "Discute avec tous les modèles Ollama installés sur cet ordinateur." },
+  assistant: { title: "Assistant IA", subtitle: "Chat local et agent IA avec accès contrôlé aux fichiers de cet ordinateur." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
   files: { title: "Transfert de fichiers", subtitle: "Échanges de fichiers entre appareils compatibles ; ADB Android est le premier connecteur disponible." },
   remote: { title: "Accès distant", subtitle: "Connecte un PC, un appareil Android ou un appareil Apple selon les fonctions autorisées par son système." },
@@ -447,7 +448,7 @@ function App() {
 
           {notice && <div className="notice-line"><span className="notice-indicator"><AlertCircle size={15}/></span><span>{notice}</span>{updateAvailable && <button className="button button-primary button-small" disabled={installingUpdate} onClick={() => void installAppUpdate()}>{installingUpdate ? "Installation…" : "Installer la mise à jour"}</button>}<button aria-label="Fermer le message" onClick={() => setNotice("")}>×</button></div>}
 
-          {page === "assistant" && <LocalAIChat runtime={runtime} />}
+          {page === "assistant" && <><LocalAIChat runtime={runtime} /><LocalAIAgent runtime={runtime} /></>}
 
           {page === "overview" && <section className="page-body">
             <div className="welcome-panel">
