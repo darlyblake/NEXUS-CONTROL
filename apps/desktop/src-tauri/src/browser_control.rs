@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use std::{fs, io::{Read, Write}, net::TcpStream, path::Path, process::{Command, Stdio}, time::Duration};
+use std::{fs, io::{Read, Write}, net::{TcpStream, ToSocketAddrs}, path::Path, process::{Command, Stdio}, time::Duration};
 use tungstenite::{connect, Message};
 
 fn command_exists(program: &str) -> bool {
@@ -60,6 +60,21 @@ fn safe_url(raw: &str) -> Result<String, String> {
             std::net::IpAddr::V6(v) => v.is_loopback() || v.is_unspecified() || v.is_unique_local() || v.is_unicast_link_local(),
         };
         if blocked { return Err("Les adresses IP privées/locales sont bloquées.".into()); }
+    } else {
+        // Refuse hostnames that resolve to local/private addresses (basic DNS-rebinding mitigation).
+        let port = parsed.port_or_known_default().ok_or("Port URL invalide.")?;
+        let resolved = (host.as_str(), port).to_socket_addrs()
+            .map_err(|_| "Impossible de vérifier l'adresse du site via DNS.".to_string())?
+            .collect::<Vec<_>>();
+        if resolved.is_empty() { return Err("Le nom de domaine ne résout vers aucune adresse.".into()); }
+        for address in resolved {
+            let ip = address.ip();
+            let blocked = match ip {
+                std::net::IpAddr::V4(v) => v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified() || v.is_broadcast(),
+                std::net::IpAddr::V6(v) => v.is_loopback() || v.is_unspecified() || v.is_unique_local() || v.is_unicast_link_local(),
+            };
+            if blocked { return Err("Le domaine pointe vers une adresse IP privée/locale ; navigation bloquée.".into()); }
+        }
     }
     Ok(parsed.to_string())
 }
@@ -118,7 +133,7 @@ pub fn fill(selector: &str, value: &str) -> Result<String, String> {
     }
     let selector = serde_json::to_string(selector).map_err(|e| e.to_string())?;
     let value = serde_json::to_string(value).map_err(|e| e.to_string())?;
-    let expression = format!("(()=>{{const s={selector};const e=document.querySelector(s);if(!e)return 'Champ introuvable : '+s;if(e.disabled||e.readOnly)return 'Champ désactivé ou en lecture seule.';if(!(e instanceof HTMLInputElement||e instanceof HTMLTextAreaElement||e instanceof HTMLSelectElement||e.isContentEditable))return 'Type de champ non pris en charge.';const v={value};if(e.isContentEditable)e.textContent=v;else{{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value')?.set;if(setter)setter.call(e,v);else e.value=v}}e.dispatchEvent(new Event('input',{{bubbles:true}}));e.dispatchEvent(new Event('change',{{bubbles:true}}));return 'Champ rempli : '+s+' (valeur masquée dans le journal).'}})()");
+    let expression = format!("(()=>{{const s={selector};const e=document.querySelector(s);if(!e)return 'Champ introuvable : '+s;if(e.disabled||e.readOnly)return 'Champ désactivé ou en lecture seule.';if(e instanceof HTMLInputElement&&(/password|one-time-code|cc-number|cc-csc/i.test(e.type+' '+e.autocomplete)||e.type==='password'))return 'Champ de mot de passe, code ou carte bancaire bloqué par sécurité.';if(!(e instanceof HTMLInputElement||e instanceof HTMLTextAreaElement||e instanceof HTMLSelectElement||e.isContentEditable))return 'Type de champ non pris en charge.';const v={value};if(e.isContentEditable)e.textContent=v;else{{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value')?.set;if(setter)setter.call(e,v);else e.value=v}}e.dispatchEvent(new Event('input',{{bubbles:true}}));e.dispatchEvent(new Event('change',{{bubbles:true}}));return 'Champ rempli : '+s+' (valeur masquée dans le journal).'}})()");
     let result = cdp("Runtime.evaluate", json!({"expression":expression,"returnByValue":true}))?;
     result.pointer("/result/result/value").and_then(Value::as_str).map(str::to_string).ok_or("Résultat de saisie indisponible.".into())
 }
