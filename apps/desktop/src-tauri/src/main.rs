@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
-use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::PathBuf, process::{Command, Stdio}, time::Duration};
+use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::{Component, Path, PathBuf}, process::{Command, Stdio}, time::Duration};
 
 #[derive(Serialize)]
 struct LocalTool {
@@ -1256,6 +1256,202 @@ fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String
         .ok_or_else(|| "Le modèle n'a retourné aucun texte. Réessaie ou choisis un autre modèle.".to_string())
 }
 
+
+const AGENT_MAX_FILE_BYTES: u64 = 1_000_000;
+
+fn agent_workspace_root(raw: &str) -> Result<PathBuf, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("Indique le dossier de travail autorisé.".to_string());
+    }
+    let root = fs::canonicalize(raw)
+        .map_err(|error| format!("Dossier de travail inaccessible : {error}"))?;
+    if !root.is_dir() {
+        return Err("Le dossier de travail doit être un répertoire existant.".to_string());
+    }
+    Ok(root)
+}
+
+fn agent_relative_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    let rel = Path::new(relative.trim());
+    if relative.trim().is_empty() || rel.is_absolute() || rel.components().any(|part| !matches!(part, Component::Normal(_))) {
+        return Err("Chemin refusé : utilise un chemin relatif au dossier autorisé, sans '..' ni chemin absolu.".to_string());
+    }
+    let candidate = root.join(rel);
+    if candidate.exists() {
+        let canonical = fs::canonicalize(&candidate).map_err(|error| format!("Chemin inaccessible : {error}"))?;
+        if !canonical.starts_with(root) {
+            return Err("Accès refusé : le chemin sort du dossier autorisé.".to_string());
+        }
+        Ok(canonical)
+    } else {
+        let parent = candidate.parent().ok_or("Chemin de fichier invalide.")?;
+        let canonical_parent = fs::canonicalize(parent)
+            .map_err(|error| format!("Le dossier parent doit déjà exister : {error}"))?;
+        if !canonical_parent.starts_with(root) {
+            return Err("Accès refusé : le chemin sort du dossier autorisé.".to_string());
+        }
+        Ok(candidate)
+    }
+}
+
+fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool) -> Result<String, String> {
+    match name {
+        "list_files" => {
+            let relative = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+            let dir = if relative == "." || relative.is_empty() {
+                root.to_path_buf()
+            } else {
+                agent_relative_path(root, relative)?
+            };
+            if !dir.starts_with(root) || !dir.is_dir() {
+                return Err("Le chemin demandé n'est pas un dossier autorisé.".to_string());
+            }
+            let mut entries = Vec::new();
+            for entry in fs::read_dir(&dir).map_err(|error| format!("Lecture du dossier impossible : {error}"))?.take(150) {
+                let entry = entry.map_err(|error| error.to_string())?;
+                let meta = entry.metadata().map_err(|error| error.to_string())?;
+                entries.push(serde_json::json!({
+                    "name": entry.file_name().to_string_lossy(),
+                    "kind": if meta.is_dir() { "directory" } else { "file" },
+                    "size": if meta.is_file() { meta.len() } else { 0 }
+                }));
+            }
+            serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())
+        }
+        "read_file" => {
+            let relative = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let path = agent_relative_path(root, relative)?;
+            let metadata = fs::metadata(&path).map_err(|error| format!("Lecture impossible : {error}"))?;
+            if !metadata.is_file() || metadata.len() > AGENT_MAX_FILE_BYTES {
+                return Err("Seuls les fichiers ordinaires de 1 Mo maximum peuvent être lus.".to_string());
+            }
+            fs::read_to_string(&path).map_err(|error| format!("Le fichier n'est pas lisible en texte UTF-8 : {error}"))
+        }
+        "write_file" => {
+            if !allow_write {
+                return Err("Écriture désactivée par l'utilisateur.".to_string());
+            }
+            let relative = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let text = args.get("content").and_then(|v| v.as_str()).ok_or("Contenu de fichier manquant.")?;
+            if text.len() as u64 > AGENT_MAX_FILE_BYTES {
+                return Err("Le contenu dépasse la limite de 1 Mo.".to_string());
+            }
+            let path = agent_relative_path(root, relative)?;
+            if let Some(parent) = path.parent() {
+                let canonical_parent = fs::canonicalize(parent).map_err(|error| format!("Dossier parent inaccessible : {error}"))?;
+                if !canonical_parent.starts_with(root) {
+                    return Err("Écriture refusée : le chemin sort du dossier autorisé.".to_string());
+                }
+            }
+            fs::write(&path, text).map_err(|error| format!("Écriture impossible : {error}"))?;
+            Ok(format!("Fichier écrit : {}", path.strip_prefix(root).unwrap_or(&path).display()))
+        }
+        _ => Err(format!("Outil inconnu : {name}")),
+    }
+}
+
+fn ollama_agent_request(body: &str) -> Result<serde_json::Value, String> {
+    let mut child = Command::new("curl")
+        .args(["--fail", "--silent", "--show-error", "--max-time", "180",
+            "-H", "Content-Type: application/json", "--data-binary", "@-",
+            "http://127.0.0.1:11434/api/chat"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().map_err(|error| format!("Impossible de contacter Ollama : {error}"))?;
+    child.stdin.as_mut().ok_or("Flux de requête indisponible.")?
+        .write_all(body.as_bytes()).map_err(|error| error.to_string())?;
+    drop(child.stdin.take());
+    let output = child.wait_with_output().map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(format!("La requête Ollama a échoué : {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("Réponse Ollama invalide : {error}"))?;
+    if let Some(error) = response.get("error").and_then(|value| value.as_str()) {
+        return Err(format!("Ollama : {error}"));
+    }
+    Ok(response)
+}
+
+#[tauri::command]
+fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_root: String, allow_write: bool) -> Result<String, String> {
+    let model = model.trim();
+    if model.is_empty() || model.len() > 200 {
+        return Err("Sélectionne un modèle Ollama installé.".to_string());
+    }
+    if messages.is_empty() || messages.len() > 24 {
+        return Err("La conversation doit contenir entre 1 et 24 messages.".to_string());
+    }
+    let root = agent_workspace_root(&workspace_root)?;
+    let installed = read_ollama_models()?;
+    if !installed.iter().any(|item| item.name == model) {
+        return Err("Ce modèle n'est pas installé dans Ollama. Actualise la liste des modèles.".to_string());
+    }
+    let mut conversation: Vec<serde_json::Value> = messages.iter().map(|message| {
+        serde_json::json!({"role": message.role, "content": message.content})
+    }).collect();
+    let mut total_chars = 0usize;
+    for message in &messages {
+        if !matches!(message.role.as_str(), "user" | "assistant") {
+            return Err("Rôle de message invalide.".to_string());
+        }
+        total_chars += message.content.chars().count();
+    }
+    if total_chars > 40_000 {
+        return Err("Conversation trop longue. Efface l'historique puis réessaie.".to_string());
+    }
+
+    let mut functions = vec![
+        serde_json::json!({"type":"function","function":{
+            "name":"list_files","description":"Lister les fichiers et sous-dossiers d'un dossier relatif au dossier de travail autorisé.",
+            "parameters":{"type":"object","properties":{"path":{"type":"string","description":"Chemin relatif, '.' pour la racine"}},"required":["path"]}
+        }}),
+        serde_json::json!({"type":"function","function":{
+            "name":"read_file","description":"Lire le contenu texte UTF-8 d'un fichier relatif au dossier autorisé (1 Mo maximum).",
+            "parameters":{"type":"object","properties":{"path":{"type":"string","description":"Chemin relatif du fichier"}},"required":["path"]}
+        }})
+    ];
+    if allow_write {
+        functions.push(serde_json::json!({"type":"function","function":{
+            "name":"write_file","description":"Créer ou remplacer un fichier texte dans le dossier de travail autorisé. Ne pas écraser un fichier sans que l'utilisateur l'ait demandé.",
+            "parameters":{"type":"object","properties":{"path":{"type":"string","description":"Chemin relatif du fichier"},"content":{"type":"string","description":"Contenu intégral du fichier"}},"required":["path","content"]}
+        }}));
+    }
+
+    for _ in 0..8 {
+        let body = serde_json::json!({
+            "model": model,
+            "messages": conversation,
+            "tools": functions,
+            "stream": false,
+            "options": {"num_ctx": 8192},
+            "keep_alive": "5m"
+        }).to_string();
+        let response = ollama_agent_request(&body)?;
+        let message = response.get("message").cloned().ok_or("Ollama n'a pas retourné de message.")?;
+        let tool_calls = message.get("tool_calls").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        if tool_calls.is_empty() {
+            return message.get("content").and_then(|v| v.as_str())
+                .filter(|value| !value.trim().is_empty()).map(str::to_string)
+                .ok_or_else(|| "Le modèle n'a retourné aucun texte. Essaie un modèle compatible avec les outils, par exemple qwen2.5.".to_string());
+        }
+        conversation.push(message);
+        for call in tool_calls {
+            let function = call.get("function").ok_or("Appel d'outil mal formé.")?;
+            let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let args = function.get("arguments").cloned().unwrap_or(serde_json::Value::Null);
+            let result = execute_agent_tool(name, &args, &root, allow_write)
+                .unwrap_or_else(|error| format!("Erreur outil : {error}"));
+            conversation.push(serde_json::json!({
+                "role": "tool",
+                "tool_name": name,
+                "content": result
+            }));
+        }
+    }
+    Err("L'agent a atteint la limite de 8 appels d'outils. Demande-lui de continuer en précisant la tâche restante.".to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -1274,7 +1470,8 @@ fn main() {
             open_remote_console,
             get_security_audit,
             list_ollama_models,
-            ollama_chat
+            ollama_chat,
+            ollama_agent_chat
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");
