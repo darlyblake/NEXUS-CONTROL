@@ -1,6 +1,6 @@
-# Windows interactive screen-share protocol (proposal)
+# Windows interactive screen-share protocol
 
-This protocol is intentionally consent-first. It is not operational until the Windows interactive-session companion, relay routing, and desktop integration are all implemented and tested.
+This protocol is consent-first. The desktop viewer is integrated and the relay now permits validated start/stop commands for a paired Windows target. The feature is still NOT operational until the Windows interactive-session capture companion is implemented and end-to-end tested.
 
 ## Session lifecycle
 
@@ -25,5 +25,7 @@ The relay must authenticate both endpoints, allow only the desktop to request st
 
 - Desktop panel component: added as `apps/desktop/src/components/ScreenSharePanel.tsx`.
 - Styles: added as `apps/desktop/src/components/screen-share.css`.
-- Not yet wired into `App.tsx` or the current relay protocol.
-- Windows interactive-session capture companion and automated build/tests are still required. Do not describe screen sharing as working until these pieces are completed and tested end to end.
+- Wired into `apps/desktop/src/App.tsx`.
+- Relay command allowlist now accepts `start_screen_share` and `stop_screen_share` only for a paired Windows target, requires local consent and validates supported JPEG dimensions/frame rates for start requests.
+- Still missing: Windows interactive-session capture companion that consumes these commands, obtains local consent, emits `screen_share_started` / `screen_share_error`, and sends JPEG binary frames. Automated relay tests and end-to-end tests are also required.
+- Do not describe screen sharing as working until the companion and end-to-end tests are completed.
