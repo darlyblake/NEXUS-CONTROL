@@ -44,3 +44,50 @@
 .network-evidence p{margin:7px 0 0;color:#7b8799}
 .network-device-card .full-button{margin-top:8px}
 @media(max-width:1050px){.network-filters{grid-template-columns:1fr}.network-device-grid{grid-template-columns:1fr}}
+
+/* Assistant IA local Ollama */
+.ai-chat-page{min-height:calc(100vh - 180px)}
+.ai-chat-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px}
+.ai-model-summary{display:flex;align-items:center;gap:11px;min-width:200px}
+.ai-model-icon{width:39px;height:39px;border-radius:10px;display:grid;place-items:center;background:#edf3ff;color:#3569e8}
+.ai-model-summary>div:last-child{display:flex;flex-direction:column;gap:5px}
+.ai-model-summary strong{font-size:11px;color:#27364b}
+.ai-model-summary span{font-size:9px;color:#8a96a8}
+.ai-chat-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ai-model-select-label{font-size:10px;color:#7d899c;font-weight:600}
+.ai-chat-controls select{max-width:260px;min-width:180px;height:34px;border:1px solid #dfe5ee;border-radius:7px;background:#fff;color:#344054;padding:0 9px;font:inherit;font-size:10px}
+.ai-chat-panel{display:flex;flex-direction:column;min-height:480px;height:calc(100vh - 340px);max-height:760px;overflow:hidden}
+.ai-chat-messages{flex:1;min-height:240px;overflow-y:auto;padding:24px clamp(16px,4vw,52px);display:flex;flex-direction:column;gap:20px}
+.ai-chat-empty{margin:auto;max-width:440px;text-align:center;padding:30px 15px;color:#8995a6}
+.ai-chat-empty-icon{width:55px;height:55px;border-radius:16px;background:#edf3ff;color:#4774d2;display:grid;place-items:center;margin:0 auto 15px}
+.ai-chat-empty h2{font-family:Manrope,sans-serif;color:#1d2d46;font-size:20px;margin:0 0 9px}
+.ai-chat-empty p{font-size:11px;line-height:1.8;margin:0 0 16px}
+.ai-message{display:flex;align-items:flex-start;gap:10px;max-width:900px;width:100%;margin:0 auto}
+.ai-message-user{flex-direction:row-reverse}
+.ai-message-avatar{width:31px;height:31px;flex:0 0 31px;display:grid;place-items:center;border-radius:9px;background:#edf3ff;color:#3569e8}
+.ai-message-user .ai-message-avatar{background:#e9eef6;color:#475569}
+.ai-message-content{min-width:0;max-width:calc(100% - 42px);padding:11px 13px;border:1px solid #e8edf4;background:#fbfcfe;border-radius:4px 11px 11px 11px}
+.ai-message-user .ai-message-content{background:#eef4ff;border-color:#dce7ff;border-radius:11px 4px 11px 11px}
+.ai-message-author{font-size:9px;font-weight:700;color:#5c6c83;margin-bottom:7px}
+.ai-message-content p{margin:0;color:#344054;font-size:12px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+.ai-thinking{display:flex;align-items:center;gap:5px;color:#7d8ba0!important}
+.ai-thinking span{width:5px;height:5px;background:#7293d8;border-radius:50%;animation:ai-pulse 1s infinite ease-in-out}
+.ai-thinking span:nth-child(2){animation-delay:.15s}.ai-thinking span:nth-child(3){animation-delay:.3s}
+@keyframes ai-pulse{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.ai-chat-composer{padding:13px 18px 15px;border-top:1px solid #edf0f5;background:#fff}
+.ai-chat-composer textarea{display:block;width:100%;min-height:58px;max-height:160px;resize:vertical;border:1px solid #dfe5ee;border-radius:8px;padding:11px 12px;outline:none;color:#344054;background:#fbfcfe;font:inherit;font-size:11px;line-height:1.6}
+.ai-chat-composer textarea:focus{border-color:#9db7f5;box-shadow:0 0 0 3px #3569e812}
+.ai-chat-composer textarea:disabled{opacity:.7}
+.ai-chat-composer-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:9px}
+.ai-chat-composer-footer>span{font-size:9px;color:#98a3b2}
+.ai-chat-error{display:flex;align-items:flex-start;gap:9px;background:#fff7f5;border:1px solid #f3d8d2;color:#a13f32;border-radius:8px;padding:11px 13px;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+.ai-chat-error svg{flex-shrink:0;margin-top:1px}
+@media(max-width:1150px){.ai-chat-toolbar{align-items:flex-start;flex-direction:column}.ai-chat-controls{width:100%}.ai-chat-controls select{flex:1;min-width:130px}.ai-chat-panel{height:calc(100vh - 390px)}}
+
+
+/* Commandes vocales de l'assistant local */
+.ai-composer-actions{display:flex;align-items:center;gap:8px}
+.ai-speak-message{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:5px 8px;border:1px solid #dfe7f3;border-radius:6px;background:#fff;color:#476ba9;font-size:10px;cursor:pointer}
+.ai-speak-message:hover{background:#f1f5fc;border-color:#cbd9f1}
+.ai-chat-controls .button[aria-pressed="true"]{background:#eaf2ff;color:#2f5eb6;border-color:#cbdcff}
+@media(max-width:700px){.ai-chat-composer-footer{align-items:flex-start;flex-direction:column}.ai-composer-actions{width:100%;justify-content:flex-end}.ai-chat-controls{align-items:stretch}.ai-chat-controls select{max-width:none;width:100%}}

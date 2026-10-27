@@ -35,6 +35,10 @@ Voir [le guide des outils de contrôle Android à distance](docs/android-remote-
 - **WireGuard** : accès distant privé, à configurer après validation de la sécurité locale.
 - **Connecteurs futurs** : Android TV, Home Assistant et gestion Apple/MDM selon les capacités autorisées.
 
+## Assistant IA local
+
+La page **Assistant IA** de l'application de bureau permet de discuter avec les modèles installés localement dans Ollama et de changer de modèle depuis l'interface. Elle n'utilise pas de clé API cloud et ne lance pas de commandes système. Voir le [guide de l'Assistant IA local](docs/local-ai-ollama.md) pour l'installation et le dépannage.
+
 ## Applications natives Windows et Linux
 
 NEXUS CONTROL est conçu comme une application de bureau Tauri, pas seulement comme un site web. Le workflow **Build desktop** construit les paquets natifs sur des runners Windows et Ubuntu et publie les fichiers en tant qu'artefacts GitHub Actions.
