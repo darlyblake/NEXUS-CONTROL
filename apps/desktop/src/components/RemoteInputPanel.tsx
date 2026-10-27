@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Keyboard, MousePointer2, Pause, Play, ScrollText, ShieldCheck } from "lucide-react";
+import { Keyboard, Monitor, MousePointer2, Pause, Play, ScrollText, ShieldCheck } from "lucide-react";
 import "./remote-input.css";
 
 type RemoteInputPanelProps = {
