@@ -29,15 +29,26 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
   const [text, setText] = useState("");
   const [lastAction, setLastAction] = useState("Aucune action envoyée.");
   const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const moveRef = useRef<{ x: number; y: number } | null>(null);
   const moveTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!socket) return;
     const onMessage = (event: MessageEvent) => {
-      if (typeof event.data !== "string") return;
+      if (typeof event.data !== "string") {
+        if (event.data instanceof Blob) {
+          const nextUrl = URL.createObjectURL(event.data);
+          setFrameUrl((old) => { if (old) URL.revokeObjectURL(old); return nextUrl; });
+        }
+        return;
+      }
       let message: InputMessage;
       try { message = JSON.parse(event.data) as InputMessage; } catch { return; }
+      if (message.type === "screen_share_stopped" || message.type === "screen_share_error") {
+        setFrameUrl((old) => { if (old) URL.revokeObjectURL(old); return null; });
+      }
       if (message.type === "control_session_pending") {
         setRequestPending(true);
         onNotice?.("Demande de contrôle envoyée. Une personne doit l’autoriser sur Windows.");
@@ -69,7 +80,8 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
 
   useEffect(() => () => {
     if (moveTimerRef.current !== null) window.clearTimeout(moveTimerRef.current);
-  }, []);
+    if (frameUrl) URL.revokeObjectURL(frameUrl);
+  }, [frameUrl]);
 
   const send = (action: string, payload: Record<string, unknown> = {}) => {
     if (!socket || socket.readyState !== WebSocket.OPEN || !active || !sessionId) return false;
@@ -117,10 +129,20 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
   };
 
   const sendPointer = (event: ReactPointerEvent<HTMLDivElement>, action: "move" | "click") => {
-    if (!active || !surfaceRef.current) return;
-    const rect = surfaceRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const surface = surfaceRef.current;
+    const image = imageRef.current;
+    if (!active || !frameUrl || !surface || !image || !image.naturalWidth || !image.naturalHeight) return;
+    const rect = surface.getBoundingClientRect();
+    const scale = Math.min(rect.width / image.naturalWidth, rect.height / image.naturalHeight);
+    const shownWidth = image.naturalWidth * scale;
+    const shownHeight = image.naturalHeight * scale;
+    const offsetX = (rect.width - shownWidth) / 2;
+    const offsetY = (rect.height - shownHeight) / 2;
+    const localX = event.clientX - rect.left - offsetX;
+    const localY = event.clientY - rect.top - offsetY;
+    if (localX < 0 || localY < 0 || localX > shownWidth || localY > shownHeight) return;
+    const x = localX / shownWidth;
+    const y = localY / shownHeight;
     if (action === "click") {
       send("mouse_click", { x, y, button: "left" });
       return;
@@ -167,16 +189,15 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
       </div>
       <div
         ref={surfaceRef}
-        className={"remote-input-surface" + (active ? " enabled" : "")}
+        className={"remote-input-surface" + (active && frameUrl ? " enabled" : "")}
         role="application"
-        aria-label="Zone de contrôle souris"
+        aria-label="Écran Windows partagé et zone de contrôle souris"
         onPointerMove={(event) => sendPointer(event, "move")}
-        onClick={(event) => sendPointer(event as unknown as React.PointerEvent<HTMLDivElement>, "click")}
-        onWheel={(event) => { if (active) { event.preventDefault(); send("mouse_scroll", { deltaX: Math.round(event.deltaX), deltaY: Math.round(event.deltaY) }); } }}
+        onClick={(event) => sendPointer(event as unknown as ReactPointerEvent<HTMLDivElement>, "click")}
+        onWheel={(event) => { if (active && frameUrl) { event.preventDefault(); send("mouse_scroll", { deltaX: Math.round(event.deltaX), deltaY: Math.round(event.deltaY) }); } }}
       >
-        <MousePointer2 size={30} />
-        <strong>{active ? "Zone de contrôle active" : "Zone souris désactivée"}</strong>
-        <span>{active ? "Déplace le pointeur ou clique ici. La position est normalisée dans cette zone." : "Autorise d’abord la session sur le PC Windows."}</span>
+        {frameUrl ? <img ref={imageRef} src={frameUrl} alt="Écran Windows partagé" draggable={false} /> : <div className="remote-input-empty"><Monitor size={30} /><strong>Flux écran non disponible</strong><span>La souris reste désactivée jusqu’à réception d’une image Windows. Démarre le partage d’écran dans le panneau ci-dessus.</span></div>}
+        <div className="remote-input-overlay"><strong>{active ? (frameUrl ? "Contrôle autorisé" : "Contrôle autorisé — en attente de l’écran") : "Zone souris désactivée"}</strong></div>
       </div>
       <div className="remote-input-keyboard">
         <label htmlFor="remote-input-text"><Keyboard size={16} /> Saisie clavier</label>
