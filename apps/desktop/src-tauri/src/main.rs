@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::Serialize;
-use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::PathBuf, process::Command, time::Duration};
+use serde::{Deserialize, Serialize};
+use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::PathBuf, process::{Command, Stdio}, time::Duration};
 
 #[derive(Serialize)]
 struct LocalTool {
@@ -1079,6 +1079,125 @@ fn get_security_audit() -> Vec<AuditCheck> {
     checks
 }
 
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OllamaModel {
+    name: String,
+    size: Option<u64>,
+    modified_at: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct OllamaChatMessage {
+    role: String,
+    content: String,
+}
+
+fn read_ollama_models() -> Result<Vec<OllamaModel>, String> {
+    let output = Command::new("curl")
+        .args(["--fail", "--silent", "--show-error", "--max-time", "5", "http://127.0.0.1:11434/api/tags"])
+        .output()
+        .map_err(|error| format!("Impossible de lancer curl pour contacter Ollama : {error}. Vérifie que curl est installé."))?;
+
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("Ollama ne répond pas sur 127.0.0.1:11434. Lance « ollama serve » dans un terminal. {detail}"));
+    }
+
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("Réponse Ollama invalide : {error}"))?;
+    let entries = payload.get("models").and_then(|value| value.as_array())
+        .ok_or("Ollama n'a pas retourné de liste de modèles.")?;
+
+    Ok(entries.iter().filter_map(|entry| {
+        let name = entry.get("name")?.as_str()?.to_string();
+        Some(OllamaModel {
+            name,
+            size: entry.get("size").and_then(|value| value.as_u64()),
+            modified_at: entry.get("modified_at").and_then(|value| value.as_str()).map(str::to_string),
+        })
+    }).collect())
+}
+
+#[tauri::command]
+fn list_ollama_models() -> Result<Vec<OllamaModel>, String> {
+    read_ollama_models()
+}
+
+#[tauri::command]
+fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String, String> {
+    let model = model.trim();
+    if model.is_empty() || model.len() > 200 {
+        return Err("Sélectionne un modèle Ollama installé.".to_string());
+    }
+    if messages.is_empty() || messages.len() > 30 {
+        return Err("La conversation doit contenir entre 1 et 30 messages. Efface l'historique pour continuer.".to_string());
+    }
+
+    let mut total_chars = 0usize;
+    for message in &messages {
+        if !matches!(message.role.as_str(), "user" | "assistant" | "system") {
+            return Err("Rôle de message invalide.".to_string());
+        }
+        if message.content.trim().is_empty() || message.content.chars().count() > 12_000 {
+            return Err("Chaque message doit contenir du texte et ne pas dépasser 12 000 caractères.".to_string());
+        }
+        total_chars += message.content.chars().count();
+    }
+    if total_chars > 50_000 {
+        return Err("La conversation est trop longue pour cette requête. Efface l'historique et réessaie.".to_string());
+    }
+
+    let installed = read_ollama_models()?;
+    if !installed.iter().any(|item| item.name == model) {
+        return Err("Ce modèle n'est pas installé dans Ollama. Actualise la liste des modèles.".to_string());
+    }
+
+    let body = serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": false
+    }).to_string();
+
+    let mut child = Command::new("curl")
+        .args([
+            "--fail", "--silent", "--show-error", "--max-time", "180",
+            "-H", "Content-Type: application/json", "--data-binary", "@-",
+            "http://127.0.0.1:11434/api/chat"
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("Impossible de lancer curl pour joindre Ollama : {error}"))?;
+
+    child.stdin.as_mut()
+        .ok_or("Impossible d'envoyer la requête à Ollama.")?
+        .write_all(body.as_bytes())
+        .map_err(|error| format!("Impossible d'envoyer le message à Ollama : {error}"))?;
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output()
+        .map_err(|error| format!("Impossible de lire la réponse d'Ollama : {error}"))?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("La requête Ollama a échoué : {detail}"));
+    }
+
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("Réponse de chat Ollama invalide : {error}"))?;
+    if let Some(error) = response.get("error").and_then(|value| value.as_str()) {
+        return Err(format!("Ollama : {error}"));
+    }
+    response.get("message")
+        .and_then(|message| message.get("content"))
+        .and_then(|content| content.as_str())
+        .filter(|content| !content.trim().is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "Le modèle n'a retourné aucun texte. Réessaie ou choisis un autre modèle.".to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -1095,7 +1214,9 @@ fn main() {
             check_app_update,
             install_app_update,
             open_remote_console,
-            get_security_audit
+            get_security_audit,
+            list_ollama_models,
+            ollama_chat
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");
