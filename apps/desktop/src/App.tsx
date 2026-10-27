@@ -83,7 +83,7 @@ function App() {
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [remoteServerUrl, setRemoteServerUrl] = useState(() => { try { return localStorage.getItem("nexus.remoteServerUrl") || ""; } catch { return ""; } });
   const [openingRemoteConsole, setOpeningRemoteConsole] = useState(false);
-  const [remoteRelayUrl, setRemoteRelayUrl] = useState("");
+  const [remoteRelayUrl, setRemoteRelayUrl] = useState(() => { try { return localStorage.getItem("nexus.remoteRelayUrl") || ""; } catch { return ""; } });
   const [remotePairCode, setRemotePairCode] = useState("");
   const [remoteDesktopToken, setRemoteDesktopToken] = useState("");
   const [remoteRelayStatus, setRemoteRelayStatus] = useState("Non connecté");
@@ -507,6 +507,7 @@ function App() {
           </section>}
 
           {page === "devices" && <section className="page-body">
+            {remotePeerRole === "windows" && <div className="panel device-panel"><div className="panel-header"><div><h3>Agent Windows connecté</h3><p>Un agent distant est authentifié via le relais NEXUS CONTROL.</p></div><span className="security-state secure-text">Connecté</span></div><div className="security-row"><div className="security-row-icon secure"><Monitor size={17}/></div><div className="security-row-copy"><strong>PC Windows associé</strong><span>Commandes disponibles dans Accès distant. La détection réseau locale n’est pas nécessaire pour cette connexion.</span></div><button className="button button-primary" onClick={() => navigate("remote")}>Ouvrir Accès distant</button></div></div>}
             <div className="filter-bar"><div className="search-box"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un appareil Android…" /></div><div className="heading-actions"><button className="button button-secondary" onClick={() => void recoverBrokenScreen()} disabled={checking}><Smartphone size={15}/>{checking ? "Diagnostic…" : "Écran cassé ? Récupérer l'accès"}</button><button className="button button-secondary" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={15} className={checking ? "spin" : ""}/> Scanner via ADB</button></div></div>
             <div className="panel device-panel"><div className="panel-header"><div><h3>Appareils Android détectés</h3><p>Les appareils sont listés uniquement si ADB les retourne réellement.</p></div><span className="count-pill">{filteredAndroid.length} trouvé(s)</span></div>
               {filteredAndroid.length === 0 ? <EmptyState icon={<Smartphone size={24}/>} title="Aucun appareil Android détecté" description="Branche un téléphone avec un câble USB de données, active le débogage USB et autorise cet ordinateur. Puis lance un nouveau scan." action="Voir les instructions" onAction={() => { setNotice("Dans un terminal : adb devices. Si le téléphone affiche unauthorized, confirme l'autorisation RSA sur l'écran du téléphone."); }}/> :
@@ -581,7 +582,7 @@ function App() {
             <div className="panel device-panel">
               <div className="panel-header"><div><h3>Relier un appareil par Internet</h3><p>Association temporaire entre ce PC et un agent NEXUS CONTROL Windows ou Android, même si les appareils ne partagent pas le Wi-Fi.</p></div><span className="count-pill">MVP</span></div>
               <label className="remote-field-label" htmlFor="nexus-relay-url">URL HTTPS du relais NEXUS</label>
-              <input id="nexus-relay-url" className="remote-server-input" type="url" placeholder="https://relais.ton-domaine.tld" value={remoteRelayUrl} onChange={event => setRemoteRelayUrl(event.target.value)} />
+              <input id="nexus-relay-url" className="remote-server-input" type="url" placeholder="https://relais.ton-domaine.tld" value={remoteRelayUrl} onChange={event => { const value = event.target.value; setRemoteRelayUrl(value); try { localStorage.setItem("nexus.remoteRelayUrl", value.trim()); } catch { /* stockage facultatif */ } }} />
               <div className="heading-actions remote-actions"><button className="button button-primary" disabled={!remoteRelayUrl.trim() || openingRemoteConsole} onClick={() => void createRemotePair()}><Link2 size={16}/>{openingRemoteConsole ? "Connexion…" : "Créer un code d'association"}</button></div>
               {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur l’appareil cible dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
               <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
