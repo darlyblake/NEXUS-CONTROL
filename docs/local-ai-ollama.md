@@ -73,6 +73,17 @@ L'agent local propose maintenant trois outils supplémentaires :
 - **Lire une page Web** : récupère et simplifie le texte d'une URL publique HTTP/HTTPS. Les pages qui dépendent fortement de JavaScript peuvent ne pas être lisibles.
 - **Ouvrir dans le navigateur** : lance l'URL publique demandée dans le navigateur par défaut du système.
 
-### Limites de navigation
+### Navigation interactive contrôlée
 
-Cette première version n'automatise pas encore les clics, la saisie dans les formulaires ni le contrôle des onglets déjà ouverts. Elle ouvre les URL dans le navigateur, peut lire le texte public récupérable par HTTP et peut analyser une capture d'écran ponctuelle. Les adresses localhost et les adresses IP privées sont bloquées pour la lecture/ouverture Web. L'agent n'envoie pas de formulaires, n'effectue pas d'achat et ne se connecte pas à des comptes.
+Active **Autoriser le navigateur** uniquement pour la requête qui doit interagir avec un site. L'interface demande une confirmation à chaque requête lorsque cette option est activée.
+
+L'agent utilise Chrome/Chromium dans un **profil séparé** avec un port de contrôle lié à `127.0.0.1`. Il peut :
+- démarrer ce navigateur dédié ;
+- naviguer vers une URL publique HTTP/HTTPS ;
+- lire le titre, l'adresse, le texte visible et les sélecteurs CSS des liens, boutons et champs ;
+- cliquer sur des éléments non sensibles ;
+- remplir des champs `input`, `textarea`, `select` et zones éditables.
+
+Prérequis : Google Chrome ou Chromium installé. L'agent n'attache pas les onglets personnels déjà ouverts ; il crée un profil de contrôle distinct. Les URL localhost, domaines `.local` et adresses IP privées/locales sont bloqués pour la navigation pilotée.
+
+**Limites de sécurité :** le formulaire n'est jamais soumis automatiquement. Les boutons de validation et les actions détectées comme achat, paiement, suppression ou confirmation sont bloqués par le contrôle de clic ; vérifie les informations puis effectue toi-même la validation finale. Les sites qui dépendent fortement de protections anti-robot, CAPTCHA, authentification complexe ou composants particuliers peuvent ne pas fonctionner. Ne donne pas à l'agent des mots de passe, codes de validation ou données sensibles. Cette version ne pilote pas les onglets personnels du navigateur habituel.
