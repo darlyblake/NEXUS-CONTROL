@@ -94,6 +94,9 @@ $propagation = [System.Security.AccessControl.PropagationFlags]::None
 $allow = [System.Security.AccessControl.AccessControlType]::Allow
 $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($systemSid, 'FullControl', $inheritance, $propagation, $allow)))
 $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, 'FullControl', $inheritance, $propagation, $allow)))
+$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+# Permit directory traversal only; the service token file remains protected by its own ACL.
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($userSid, 'ReadAndExecute', 'None', 'None', $allow)))
 Set-Acl -LiteralPath $configDirectory -AclObject $acl
 
 $config = @{
@@ -125,7 +128,6 @@ $companionAcl.SetAccessRuleProtection($true, $false)
 $companionAcl.SetOwner($adminsSid)
 $companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($systemSid, 'FullControl', 'Allow')))
 $companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, 'FullControl', 'Allow')))
-$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 $companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($userSid, 'Read', 'Allow')))
 Set-Acl -LiteralPath $companionConfigPath -AclObject $companionAcl
 
