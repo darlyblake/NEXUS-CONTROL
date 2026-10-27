@@ -114,7 +114,7 @@ pub fn navigate(raw: &str) -> Result<String, String> {
 pub fn snapshot() -> Result<String, String> {
     let result = cdp("Runtime.evaluate", json!({"returnByValue":true,"expression":
         "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,12000),elements:[...document.querySelectorAll('a,button,input,textarea,select,[role=button]')].slice(0,100).map((e,i)=>({index:i,tag:e.tagName,text:(e.innerText||e.getAttribute('aria-label')||e.placeholder||'').trim().slice(0,140),type:e.type||'',name:e.name||'',id:e.id||'',href:e.href||''}))})"}))?;
-    let value = result.pointer("/result/result/value").and_then(Value::as_str).ok_or("Lecture de page impossible.")?;
+    let value = result.pointer("/result/value").and_then(Value::as_str).ok_or("Lecture de page impossible.")?;
     let parsed: Value = serde_json::from_str(value).map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&parsed).map_err(|e| e.to_string())
 }
@@ -124,7 +124,7 @@ pub fn click(selector: &str) -> Result<String, String> {
     let selector = serde_json::to_string(selector).map_err(|e| e.to_string())?;
     let expression = format!("(()=>{{const s={selector};const e=document.querySelector(s);if(!e)return 'Élément introuvable : '+s;const t=((e.innerText||e.value||e.getAttribute('aria-label')||'')+'').trim().toLowerCase();if(e.matches('button[type=submit],input[type=submit],button[form],input[type=image]')||/(payer|payment|purchase|acheter|commander|supprimer|delete|remove|confirmer|confirm|envoyer|submit|sign out|déconnexion)/i.test(t))return 'Action bloquée : validation ou action potentiellement sensible. Vérifie puis effectue cette étape manuellement.';e.scrollIntoView({block:'center'});e.click();return 'Élément cliqué : '+s}})()");
     let result = cdp("Runtime.evaluate", json!({"expression":expression,"returnByValue":true}))?;
-    result.pointer("/result/result/value").and_then(Value::as_str).map(str::to_string).ok_or("Résultat du clic indisponible.".into())
+    result.pointer("/result/value").and_then(Value::as_str).map(str::to_string).ok_or("Résultat du clic indisponible.".into())
 }
 
 pub fn fill(selector: &str, value: &str) -> Result<String, String> {
@@ -135,5 +135,5 @@ pub fn fill(selector: &str, value: &str) -> Result<String, String> {
     let value = serde_json::to_string(value).map_err(|e| e.to_string())?;
     let expression = format!("(()=>{{const s={selector};const e=document.querySelector(s);if(!e)return 'Champ introuvable : '+s;if(e.disabled||e.readOnly)return 'Champ désactivé ou en lecture seule.';if(e instanceof HTMLInputElement&&(/password|one-time-code|cc-number|cc-csc/i.test(e.type+' '+e.autocomplete)||e.type==='password'))return 'Champ de mot de passe, code ou carte bancaire bloqué par sécurité.';if(!(e instanceof HTMLInputElement||e instanceof HTMLTextAreaElement||e instanceof HTMLSelectElement||e.isContentEditable))return 'Type de champ non pris en charge.';const v={value};if(e.isContentEditable)e.textContent=v;else{{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value')?.set;if(setter)setter.call(e,v);else e.value=v}}e.dispatchEvent(new Event('input',{{bubbles:true}}));e.dispatchEvent(new Event('change',{{bubbles:true}}));return 'Champ rempli : '+s+' (valeur masquée dans le journal).'}})()");
     let result = cdp("Runtime.evaluate", json!({"expression":expression,"returnByValue":true}))?;
-    result.pointer("/result/result/value").and_then(Value::as_str).map(str::to_string).ok_or("Résultat de saisie indisponible.".into())
+    result.pointer("/result/value").and_then(Value::as_str).map(str::to_string).ok_or("Résultat de saisie indisponible.".into())
 }
