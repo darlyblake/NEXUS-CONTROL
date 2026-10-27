@@ -1304,6 +1304,70 @@ fn agent_relative_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     }
 }
 
+fn capture_screen_for_vision() -> Result<String, String> {
+    let temp = std::env::temp_dir().join(format!("nexus-control-screen-{}.png", std::process::id()));
+    let path = temp.to_string_lossy().to_string();
+
+    #[cfg(target_os = "linux")]
+    {
+        let commands: Vec<(&str, Vec<&str>)> = vec![
+            ("gnome-screenshot", vec!["--file", &path]),
+            ("scrot", vec![&path]),
+            ("grim", vec![&path]),
+            ("import", vec!["-window", "root", &path]),
+        ];
+        let mut captured = false;
+        for (program, args) in commands {
+            if !command_exists(program) { continue; }
+            if Command::new(program).args(args).status().map(|s| s.success()).unwrap_or(false) && Path::new(&path).is_file() {
+                captured = true; break;
+            }
+        }
+        if !captured {
+            return Err("Capture indisponible : installe gnome-screenshot, scrot, grim ou ImageMagick (import). Une session graphique active est nécessaire.".to_string());
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!(
+            "Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp=New-Object System.Drawing.Bitmap($b.Width,$b.Height); $g=[System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Location,[System.Drawing.Point]::Empty,$b.Size); $bmp.Save('{}',[System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()",
+            path.replace('\'', "''")
+        );
+        let status = Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .status().map_err(|error| format!("Capture Windows impossible : {error}"))?;
+        if !status.success() || !Path::new(&path).is_file() {
+            return Err("La capture de l'écran Windows a échoué.".to_string());
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("screencapture").args(["-x", &path]).status()
+            .map_err(|error| format!("Capture macOS impossible : {error}"))?;
+        if !status.success() || !Path::new(&path).is_file() {
+            return Err("La capture de l'écran macOS a échoué.".to_string());
+        }
+    }
+
+    // Redimensionner la capture si ImageMagick est disponible afin de limiter le volume envoyé au modèle.
+    if command_exists("magick") {
+        let _ = Command::new("magick").args([&path, "-resize", "1280x1280>", "-strip", &path]).status();
+    } else if command_exists("convert") {
+        let _ = Command::new("convert").args([&path, "-resize", "1280x1280>", "-strip", &path]).status();
+    }
+    let encoded = Command::new("base64").args(["-w", "0", &path]).output()
+        .or_else(|_| Command::new("base64").arg(&path).output())
+        .map_err(|error| format!("Impossible d'encoder la capture : {error}"))?;
+    let _ = fs::remove_file(&temp);
+    if !encoded.status.success() {
+        return Err("Impossible d'encoder la capture d'écran.".to_string());
+    }
+    let data = String::from_utf8_lossy(&encoded.stdout).trim().to_string();
+    if data.is_empty() || data.len() > 12_000_000 {
+        return Err("Capture trop volumineuse ou vide. Installe ImageMagick pour réduire la taille.".to_string());
+    }
+    Ok(format!("NEXUS_SCREENSHOT_BASE64:{data}"))
+}
+
 fn validate_public_http_url(raw: &str) -> Result<String, String> {
     let parsed = url::Url::parse(raw.trim()).map_err(|_| "URL invalide.".to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
@@ -1418,6 +1482,7 @@ fn search_public_web(query: &str) -> Result<String, String> {
 
 fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool) -> Result<String, String> {
     match name {
+        "capture_screen" => capture_screen_for_vision(),
         "open_browser" => {
             let url = args.get("url").and_then(|v| v.as_str()).unwrap_or("");
             open_default_browser(url)
@@ -1536,6 +1601,10 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
 
     let mut functions = vec![
         serde_json::json!({"type":"function","function":{
+            "name":"capture_screen","description":"Capturer l'écran principal actuel de cet ordinateur et fournir l'image au modèle pour qu'il la décrive. N'utiliser que lorsque l'utilisateur demande explicitement de voir ou analyser l'écran.",
+            "parameters":{"type":"object","properties":{},"required":[]}
+        }}),
+        serde_json::json!({"type":"function","function":{
             "name":"web_search","description":"Rechercher sur le Web public une question ou des mots-clés et retourner des titres, liens et extraits.",
             "parameters":{"type":"object","properties":{"query":{"type":"string","description":"Question ou mots-clés de recherche"}},"required":["query"]}
         }}),
@@ -1587,6 +1656,21 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
             let args = function.get("arguments").cloned().unwrap_or(serde_json::Value::Null);
             let result = execute_agent_tool(name, &args, &root, allow_write)
                 .unwrap_or_else(|error| format!("Erreur outil : {error}"));
+            if name == "capture_screen" {
+                if let Some(image_data) = result.strip_prefix("NEXUS_SCREENSHOT_BASE64:") {
+                    conversation.push(serde_json::json!({
+                        "role": "tool",
+                        "tool_name": name,
+                        "content": "Capture réalisée. L'image est jointe au message suivant pour analyse visuelle."
+                    }));
+                    conversation.push(serde_json::json!({
+                        "role": "user",
+                        "content": "Analyse la capture d'écran actuelle. Décris ce qui est visible et propose une prochaine action, sans prétendre avoir cliqué ou modifié quoi que ce soit.",
+                        "images": [image_data]
+                    }));
+                    continue;
+                }
+            }
             conversation.push(serde_json::json!({
                 "role": "tool",
                 "tool_name": name,
