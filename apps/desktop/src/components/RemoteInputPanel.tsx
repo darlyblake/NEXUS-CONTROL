@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Keyboard, MousePointer2, Pause, Play, ScrollText, ShieldCheck } from "lucide-react";
 import "./remote-input.css";
 
@@ -116,7 +116,7 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
     onNotice?.("Demande d’arrêt envoyée. Le compagnon Windows doit également terminer la session.");
   };
 
-  const sendPointer = (event: React.PointerEvent<HTMLDivElement>, action: "move" | "click") => {
+  const sendPointer = (event: ReactPointerEvent<HTMLDivElement>, action: "move" | "click") => {
     if (!active || !surfaceRef.current) return;
     const rect = surfaceRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
