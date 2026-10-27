@@ -312,8 +312,11 @@ wss.on("connection", (ws) => {
             !new Set(["mouse_move", "mouse_click", "mouse_scroll", "keyboard_text"]).has(message.input.action) ||
             (message.input.action === "keyboard_text" && (typeof message.input.text !== "string" || message.input.text.length > 2000)) ||
             (["mouse_move", "mouse_click"].includes(message.input.action) &&
-              (typeof message.input.x !== "number" || message.input.x < 0 || message.input.x > 1 ||
-               typeof message.input.y !== "number" || message.input.y < 0 || message.input.y > 1))
+              (typeof message.input.x !== "number" || !Number.isFinite(message.input.x) || message.input.x < 0 || message.input.x > 1 ||
+               typeof message.input.y !== "number" || !Number.isFinite(message.input.y) || message.input.y < 0 || message.input.y > 1)) ||
+            (message.input.action === "mouse_scroll" &&
+              ((message.input.deltaX !== undefined && (!Number.isInteger(message.input.deltaX) || Math.abs(message.input.deltaX) > 1200)) ||
+               (message.input.deltaY !== undefined && (!Number.isInteger(message.input.deltaY) || Math.abs(message.input.deltaY) > 1200))))
           ))) {
         return ws.close(4403, "invalid_or_unauthorized_command");
       }
