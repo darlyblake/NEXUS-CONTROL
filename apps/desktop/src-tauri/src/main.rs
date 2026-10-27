@@ -1588,7 +1588,13 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
     if messages.is_empty() || messages.len() > 24 {
         return Err("La conversation doit contenir entre 1 et 24 messages.".to_string());
     }
-    let root = agent_workspace_root(&workspace_root)?;
+    let root = if workspace_root.trim().is_empty() && browser_enabled && !allow_write {
+        let isolated = std::env::temp_dir().join("nexus-control-browser-only-workspace");
+        fs::create_dir_all(&isolated).map_err(|error| format!("Espace temporaire indisponible : {error}"))?;
+        agent_workspace_root(isolated.to_str().ok_or("Chemin temporaire invalide.")?)?
+    } else {
+        agent_workspace_root(&workspace_root)?
+    };
     let installed = read_ollama_models()?;
     if !installed.iter().any(|item| item.name == model) {
         return Err("Ce modèle n'est pas installé dans Ollama. Actualise la liste des modèles.".to_string());
