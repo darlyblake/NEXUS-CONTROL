@@ -1,114 +1,76 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Bot, CircleAlert, FileText, LockKeyhole, RefreshCw, Send, ShieldCheck, ShieldAlert, Trash2 } from "lucide-react";
+import { Bot, Folder, Globe, LockKeyhole, RefreshCw, ShieldCheck, ShieldAlert, Volume2 } from "lucide-react";
 
 type Model = { name: string; size?: number };
-type Message = { role: "user" | "assistant"; content: string; id: number };
+type AgentSettings = { model: string; workspace: string; allowWrite: boolean; browserEnabled: boolean; voiceReplies: boolean };
+const SETTINGS_KEY = "nexus.ai.settings";
+const defaults: AgentSettings = { model: "", workspace: "", allowWrite: false, browserEnabled: false, voiceReplies: false };
 
-export function LocalAIAgent({ runtime }: { runtime: boolean }) {
+function readSettings(): AgentSettings {
+  try { return { ...defaults, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<AgentSettings>) }; }
+  catch { return defaults; }
+}
+
+export function LocalAISettings({ runtime }: { runtime: boolean }) {
   const [models, setModels] = useState<Model[]>([]);
-  const [model, setModel] = useState("");
-  const [workspace, setWorkspace] = useState("");
-  const [allowWrite, setAllowWrite] = useState(false);
-  const [browserEnabled, setBrowserEnabled] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [settings, setSettings] = useState<AgentSettings>(readSettings);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const update = (patch: Partial<AgentSettings>) => {
+    setSettings(current => {
+      const next = { ...current, ...patch };
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(next)); } catch { /* stockage local indisponible */ }
+      return next;
+    });
+    setStatus("Paramètres de l’assistant enregistrés sur cet ordinateur.");
+  };
 
   const refreshModels = useCallback(async () => {
-    if (!runtime) return;
+    if (!runtime) { setStatus("La liste des modèles est disponible dans l’application de bureau."); return; }
+    setLoading(true); setStatus("");
     try {
       const available = await invoke<Model[]>("list_ollama_models");
       setModels(available);
-      setModel(current => available.some(item => item.name === current) ? current : (available.find(item => item.name.startsWith("qwen2.5"))?.name ?? available[0]?.name ?? ""));
-    } catch (cause) { setError(String(cause)); }
+      setSettings(current => {
+        const next = { ...current, model: available.some(item => item.name === current.model) ? current.model : (available[0]?.name || "") };
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
+      if (!available.length) setStatus("Aucun modèle installé. Utilise « ollama pull nom-du-modèle » dans un terminal.");
+      else setStatus(available.length + " modèle(s) local(aux) détecté(s).");
+    } catch (error) { setStatus("Impossible de lire les modèles Ollama : " + String(error)); }
+    finally { setLoading(false); }
   }, [runtime]);
 
   useEffect(() => { void refreshModels(); }, [refreshModels]);
 
-  const send = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text || !model || busy) return;
-    if (!workspace.trim() && (!browserEnabled || allowWrite)) { setError("Indique un dossier autorisé pour lire ou modifier des fichiers. Pour une tâche limitée au navigateur, laisse l'écriture désactivée et active Autoriser le navigateur."); return; }
-    if (allowWrite && !window.confirm("Autoriser l'IA à créer ou remplacer des fichiers texte dans ce dossier ? Les modifications ne seront pas automatiquement annulées.")) return;
-    if (browserEnabled && !window.confirm("Autoriser cette requête à piloter un navigateur dédié : ouvrir des sites publics, lire la page, cliquer sur des éléments non sensibles et remplir des champs ? Les formulaires ne seront pas soumis automatiquement.")) return;
-
-    const userMessage: Message = { role: "user", content: text, id: Date.now() };
-    const nextMessages = [...messages, userMessage].slice(-24);
-    setMessages(nextMessages); setDraft(""); setBusy(true); setError(""); setNotice("");
-    try {
-      const answer = await invoke<string>("ollama_agent_chat", {
-        model,
-        messages: nextMessages.map(({ role, content }) => ({ role, content })),
-        workspaceRoot: workspace.trim(),
-        allowWrite,
-        browserEnabled
-      });
-      setMessages(current => [...current, { role: "assistant", content: answer, id: Date.now() + 1 }]);
-      setNotice(allowWrite ? "Accès en lecture et écriture activé pour cette requête." : "Accès en lecture seule utilisé pour cette requête.");
-    } catch (cause) { setError(String(cause)); }
-    finally { setBusy(false); }
-  };
-
-  return <section className="page-body ai-agent-page">
-    <div className="panel ai-agent-permissions">
-      <div className="panel-header">
-        <div><h3><FileText size={16} /> Agent local — fichiers et dossiers</h3><p>L'IA peut analyser l'écran sur demande, rechercher sur le Web, ouvrir des pages publiques et travailler dans le dossier autorisé.</p></div>
-        <button className="button button-secondary" onClick={() => void refreshModels()} disabled={busy}><RefreshCw size={14}/> Modèles</button>
+  return <section className="ai-settings-section">
+    <div className="ai-settings-title"><div className="ai-settings-title-icon"><Bot size={19}/></div><div><h2>Assistant IA</h2><p>Modèle, voix et autorisations de l’agent local. Ces options ne sont plus affichées dans le chat.</p></div></div>
+    {status && <div className="ai-settings-status">{status}</div>}
+    <div className="panel ai-settings-panel">
+      <div className="ai-settings-row">
+        <div className="ai-settings-row-icon"><Bot size={18}/></div><div className="ai-settings-row-copy"><strong>Modèle Ollama</strong><span>Choisis le modèle utilisé dans le chat et le mode agent.</span></div>
+        <div className="ai-settings-row-control"><select value={settings.model} onChange={event => update({ model: event.target.value })} disabled={!models.length || loading}><option value="">Aucun modèle détecté</option>{models.map(item => <option key={item.name} value={item.name}>{item.name}{item.size ? " · " + (item.size / 1_000_000_000).toFixed(1) + " Go" : ""}</option>)}</select><button className="button button-secondary" type="button" onClick={() => void refreshModels()} disabled={loading}><RefreshCw size={14} className={loading ? "spin" : ""}/> Actualiser</button></div>
       </div>
-      <div className="ai-agent-settings">
-        <label className="ai-agent-field">Modèle Ollama
-          <select value={model} onChange={event => setModel(event.target.value)} disabled={busy || models.length === 0}>
-            {models.length === 0 && <option value="">Aucun modèle trouvé</option>}
-            {models.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
-          </select>
-        </label>
-        <label className="ai-agent-field">Dossier autorisé (chemin absolu, facultatif pour navigateur seul)
-          <input value={workspace} onChange={event => setWorkspace(event.target.value)} placeholder="/home/ton-utilisateur/Projets/mon-projet — vide si navigateur seul" spellCheck={false} disabled={busy}/>
-        </label>
-        <div className="ai-agent-permission-row">
-          <div className={"ai-agent-permission-icon " + (allowWrite ? "danger" : "")}>{allowWrite ? <ShieldAlert size={18}/> : <ShieldCheck size={18}/>}</div>
-          <div className="ai-agent-permission-copy">
-            <strong>{allowWrite ? "Lecture + écriture" : "Lecture seule"}</strong>
-            <span>{allowWrite ? "L'IA peut créer ou remplacer des fichiers texte dans le dossier choisi." : "L'IA peut lister les fichiers et lire le texte, sans modifier le contenu."}</span>
-          </div>
-          <label className="ai-agent-toggle"><input type="checkbox" checked={allowWrite} onChange={event => setAllowWrite(event.target.checked)} disabled={busy}/> Autoriser l'écriture</label>
-        </div>
-        <div className="ai-agent-permission-row">
-          <div className={"ai-agent-permission-icon " + (browserEnabled ? "danger" : "")}><ShieldCheck size={18}/></div>
-          <div className="ai-agent-permission-copy">
-            <strong>{browserEnabled ? "Navigation et interactions activées" : "Navigation contrôlée désactivée"}</strong>
-            <span>{browserEnabled ? "L'agent peut démarrer un navigateur séparé, lire la page, cliquer sur des éléments non sensibles et remplir des champs. Il ne soumet pas les formulaires." : "Active cette option uniquement lorsque tu veux que l'agent interagisse avec un site Web."}</span>
-          </div>
-          <label className="ai-agent-toggle"><input type="checkbox" checked={browserEnabled} onChange={event => setBrowserEnabled(event.target.checked)} disabled={busy}/> Autoriser le navigateur</label>
-        </div>
-        <div className="info-banner"><LockKeyhole size={17}/><div><strong>Périmètre de sécurité</strong><p>Les outils sont limités au dossier choisi. Les chemins absolus et les tentatives de sortie du dossier sont refusés. Lecture limitée aux fichiers texte de 1 Mo, liste de 150 éléments maximum par dossier. Aucun terminal, accès administrateur, suppression ou accès réseau n'est donné à l'IA.</p></div></div>
+      <div className="ai-settings-row ai-settings-row-stack">
+        <div className="ai-settings-row-icon"><Folder size={18}/></div><div className="ai-settings-row-copy"><strong>Dossier de travail autorisé</strong><span>L’agent est limité à ce dossier pour les opérations sur les fichiers.</span></div>
+        <input className="ai-settings-path" value={settings.workspace} onChange={event => update({ workspace: event.target.value })} placeholder="/home/ton-utilisateur/Projets/mon-projet" spellCheck={false}/>
       </div>
-    </div>
-
-    {error && <div className="ai-chat-error"><CircleAlert size={16}/><span>{error}</span></div>}
-    {notice && <div className="ai-agent-notice"><ShieldCheck size={15}/>{notice}</div>}
-
-    <div className="panel ai-agent-chat">
-      <div className="panel-header">
-        <div><h3><Bot size={17}/> Demande à l'agent</h3><p>Exemples : « analyse l’écran », « recherche React », « démarre le navigateur contrôlé et ouvre https://example.com », « lis la page », « clique sur le menu Connexion », « remplis le champ #email ».</p></div>
-        <button className="button button-secondary" type="button" disabled={busy || messages.length === 0} onClick={() => { setMessages([]); setError(""); setNotice(""); }}><Trash2 size={14}/> Effacer</button>
+      <div className="ai-settings-row">
+        <div className={"ai-settings-row-icon " + (settings.allowWrite ? "ai-settings-warning" : "")}>{settings.allowWrite ? <ShieldAlert size={18}/> : <ShieldCheck size={18}/>}</div><div className="ai-settings-row-copy"><strong>Autoriser l’écriture de fichiers</strong><span>{settings.allowWrite ? "L’agent pourra créer ou remplacer des fichiers texte dans le dossier configuré, après confirmation." : "Lecture seule : l’agent ne peut pas modifier le contenu des fichiers."}</span></div>
+        <label className="ai-settings-toggle"><input type="checkbox" checked={settings.allowWrite} onChange={event => update({ allowWrite: event.target.checked })}/> Autoriser l’écriture</label>
       </div>
-      <div className="ai-agent-messages" aria-live="polite">
-        {messages.length === 0 && <div className="ai-chat-empty"><div className="ai-chat-empty-icon"><Bot size={24}/></div><h2>Un agent local : écran, Web, navigateur et fichiers</h2><p>Demande une capture d’écran, une recherche Web ou l’ouverture d’une page. Active l’écriture uniquement si tu veux modifier des fichiers.</p></div>}
-        {messages.map(message => <article className={"ai-message " + (message.role === "user" ? "ai-message-user" : "ai-message-assistant")} key={message.id}>
-          <div className="ai-message-avatar">{message.role === "user" ? "T" : <Bot size={17}/>}</div>
-          <div className="ai-message-content"><div className="ai-message-author">{message.role === "user" ? "Toi" : model || "Agent local"}</div><p className="ai-agent-message-text">{message.content}</p></div>
-        </article>)}
-        {busy && <div className="ai-agent-busy"><RefreshCw size={14} className="spin"/> L'agent examine les fichiers ou prépare sa réponse…</div>}
+      <div className="ai-settings-row">
+        <div className={"ai-settings-row-icon " + (settings.browserEnabled ? "ai-settings-warning" : "")}><Globe size={18}/></div><div className="ai-settings-row-copy"><strong>Navigation contrôlée</strong><span>{settings.browserEnabled ? "L’agent peut piloter un navigateur dédié sur demande. Les formulaires ne sont pas soumis automatiquement." : "Désactivée par défaut ; active-la seulement pour une tâche qui nécessite le navigateur."}</span></div>
+        <label className="ai-settings-toggle"><input type="checkbox" checked={settings.browserEnabled} onChange={event => update({ browserEnabled: event.target.checked })}/> Autoriser le navigateur</label>
       </div>
-      <form className="ai-chat-composer" onSubmit={send}>
-        <textarea value={draft} onChange={event => setDraft(event.target.value)} rows={2} maxLength={8000} placeholder="Décris la tâche à effectuer dans le dossier autorisé…" disabled={busy || !model} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }}}/>
-        <div className="ai-chat-composer-footer"><span>Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne</span><button className="button button-primary" type="submit" disabled={busy || !draft.trim() || !model}><Send size={15}/>{busy ? "Traitement…" : "Envoyer à l'agent"}</button></div>
-      </form>
+      <div className="ai-settings-row">
+        <div className="ai-settings-row-icon"><Volume2 size={18}/></div><div className="ai-settings-row-copy"><strong>Lecture vocale</strong><span>La lecture vocale peut aussi être activée directement dans l’en-tête du chat.</span></div>
+        <label className="ai-settings-toggle"><input type="checkbox" checked={settings.voiceReplies} onChange={event => update({ voiceReplies: event.target.checked })}/> Préférence activée</label>
+      </div>
+      <div className="ai-settings-security"><LockKeyhole size={17}/><div><strong>Contrôles de sécurité</strong><p>L’écriture et le navigateur demandent une confirmation au moment de l’utilisation. L’agent n’obtient pas de terminal administrateur par ces réglages. Ne choisis que des dossiers que tu es autorisé à utiliser.</p></div></div>
     </div>
   </section>;
 }
