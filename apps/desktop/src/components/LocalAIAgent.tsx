@@ -10,6 +10,7 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
   const [model, setModel] = useState("");
   const [workspace, setWorkspace] = useState("");
   const [allowWrite, setAllowWrite] = useState(false);
+  const [browserEnabled, setBrowserEnabled] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,6 +34,7 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
     if (!text || !model || busy) return;
     if (!workspace.trim()) { setError("Indique d'abord le dossier que l'IA est autorisée à lire."); return; }
     if (allowWrite && !window.confirm("Autoriser l'IA à créer ou remplacer des fichiers texte dans ce dossier ? Les modifications ne seront pas automatiquement annulées.")) return;
+    if (browserEnabled && !window.confirm("Autoriser cette requête à piloter un navigateur dédié : ouvrir des sites publics, lire la page, cliquer sur des éléments non sensibles et remplir des champs ? Les formulaires ne seront pas soumis automatiquement.")) return;
 
     const userMessage: Message = { role: "user", content: text, id: Date.now() };
     const nextMessages = [...messages, userMessage].slice(-24);
@@ -42,7 +44,8 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
         model,
         messages: nextMessages.map(({ role, content }) => ({ role, content })),
         workspaceRoot: workspace.trim(),
-        allowWrite
+        allowWrite,
+        browserEnabled
       });
       setMessages(current => [...current, { role: "assistant", content: answer, id: Date.now() + 1 }]);
       setNotice(allowWrite ? "Accès en lecture et écriture activé pour cette requête." : "Accès en lecture seule utilisé pour cette requête.");
@@ -74,6 +77,14 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
           </div>
           <label className="ai-agent-toggle"><input type="checkbox" checked={allowWrite} onChange={event => setAllowWrite(event.target.checked)} disabled={busy}/> Autoriser l'écriture</label>
         </div>
+        <div className="ai-agent-permission-row">
+          <div className={"ai-agent-permission-icon " + (browserEnabled ? "danger" : "")}><ShieldCheck size={18}/></div>
+          <div className="ai-agent-permission-copy">
+            <strong>{browserEnabled ? "Navigation et interactions activées" : "Navigation contrôlée désactivée"}</strong>
+            <span>{browserEnabled ? "L'agent peut démarrer un navigateur séparé, lire la page, cliquer sur des éléments non sensibles et remplir des champs. Il ne soumet pas les formulaires." : "Active cette option uniquement lorsque tu veux que l'agent interagisse avec un site Web."}</span>
+          </div>
+          <label className="ai-agent-toggle"><input type="checkbox" checked={browserEnabled} onChange={event => setBrowserEnabled(event.target.checked)} disabled={busy}/> Autoriser le navigateur</label>
+        </div>
         <div className="info-banner"><LockKeyhole size={17}/><div><strong>Périmètre de sécurité</strong><p>Les outils sont limités au dossier choisi. Les chemins absolus et les tentatives de sortie du dossier sont refusés. Lecture limitée aux fichiers texte de 1 Mo, liste de 150 éléments maximum par dossier. Aucun terminal, accès administrateur, suppression ou accès réseau n'est donné à l'IA.</p></div></div>
       </div>
     </div>
@@ -83,11 +94,11 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
 
     <div className="panel ai-agent-chat">
       <div className="panel-header">
-        <div><h3><Bot size={17}/> Demande à l'agent</h3><p>Exemples : « analyse ce qui est affiché à l’écran », « recherche les nouveautés React sur Internet », « ouvre https://example.com », « lis README.md », « crée notes.txt avec… ».</p></div>
+        <div><h3><Bot size={17}/> Demande à l'agent</h3><p>Exemples : « analyse l’écran », « recherche React », « démarre le navigateur contrôlé et ouvre https://example.com », « lis la page », « clique sur le menu Connexion », « remplis le champ #email ».</p></div>
         <button className="button button-secondary" type="button" disabled={busy || messages.length === 0} onClick={() => { setMessages([]); setError(""); setNotice(""); }}><Trash2 size={14}/> Effacer</button>
       </div>
       <div className="ai-agent-messages" aria-live="polite">
-        {messages.length === 0 && <div className="ai-chat-empty"><div className="ai-chat-empty-icon"><Bot size={24}/></div><h2>Un agent local : écran, Web et fichiers</h2><p>Demande une capture d’écran, une recherche Web ou l’ouverture d’une page. Active l’écriture uniquement si tu veux modifier des fichiers.</p></div>}
+        {messages.length === 0 && <div className="ai-chat-empty"><div className="ai-chat-empty-icon"><Bot size={24}/></div><h2>Un agent local : écran, Web, navigateur et fichiers</h2><p>Demande une capture d’écran, une recherche Web ou l’ouverture d’une page. Active l’écriture uniquement si tu veux modifier des fichiers.</p></div>}
         {messages.map(message => <article className={"ai-message " + (message.role === "user" ? "ai-message-user" : "ai-message-assistant")} key={message.id}>
           <div className="ai-message-avatar">{message.role === "user" ? "T" : <Bot size={17}/>}</div>
           <div className="ai-message-content"><div className="ai-message-author">{message.role === "user" ? "Toi" : model || "Agent local"}</div><p className="ai-agent-message-text">{message.content}</p></div>
