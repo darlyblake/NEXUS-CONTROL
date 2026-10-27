@@ -205,7 +205,7 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
         onClick={(event) => sendPointer(event as unknown as ReactPointerEvent<HTMLDivElement>, "click")}
         onWheel={(event) => { if (active && frameUrl) { event.preventDefault(); send("mouse_scroll", { deltaX: Math.round(event.deltaX), deltaY: Math.round(event.deltaY) }); } }}
       >
-        {frameUrl ? <img ref={imageRef} src={frameUrl} alt="Écran Windows partagé" draggable={false} /> : <div className="remote-input-empty"><Monitor size={30} /><strong>Flux écran non disponible</strong><span>La souris reste désactivée jusqu’à réception d’une image Windows. Démarre le partage d’écran dans le panneau ci-dessus.</span></div>}
+        {frameUrl ? <img ref={imageRef} src={frameUrl} alt="Écran Windows partagé" draggable={false} /> : <div className="remote-input-empty"><Monitor size={30} /><strong>Flux écran non disponible</strong><span>La souris reste désactivée jusqu’à réception d’une image Windows. Le transport vidéo du relais n’est pas encore disponible.</span></div>}
         <div className="remote-input-overlay"><strong>{active ? (frameUrl ? "Contrôle autorisé" : "Contrôle autorisé — en attente de l’écran") : "Zone souris désactivée"}</strong></div>
       </div>
       <div className="remote-input-keyboard">
