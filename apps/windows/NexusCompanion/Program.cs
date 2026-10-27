@@ -223,7 +223,11 @@ internal sealed class CompanionApplication : ApplicationContext
                     var px = bounds.Left + (int)Math.Round(x * Math.Max(0, bounds.Width - 1));
                     var py = bounds.Top + (int)Math.Round(y * Math.Max(0, bounds.Height - 1));
                     InputNative.MoveMouse(px, py, bounds);
-                    if (inputAction == "mouse_click") InputNative.LeftClick();
+                    if (inputAction == "mouse_click")
+                    {
+                        var button = input.TryGetProperty("button", out var buttonValue) ? buttonValue.GetString() : "left";
+                        if (button == "right") InputNative.RightClick(); else InputNative.LeftClick();
+                    }
                     break;
                 case "mouse_scroll":
                     var dx = input.TryGetProperty("deltaX", out var dxValue) && dxValue.TryGetInt32(out var dxRead) ? Math.Clamp(dxRead, -1200, 1200) : 0;
@@ -345,6 +349,8 @@ internal static class InputNative
     private const uint MOUSEEVENTF_MOVE = 0x0001;
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
     private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const uint MOUSEEVENTF_HWHEEL = 0x1000;
     private const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
@@ -373,6 +379,9 @@ internal static class InputNative
     public static void LeftClick() => Send(
         new INPUT { type = INPUT_MOUSE, U = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_LEFTDOWN } } },
         new INPUT { type = INPUT_MOUSE, U = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_LEFTUP } } });
+    public static void RightClick() => Send(
+        new INPUT { type = INPUT_MOUSE, U = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_RIGHTDOWN } } },
+        new INPUT { type = INPUT_MOUSE, U = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_RIGHTUP } } });
     public static void Scroll(int horizontal, int vertical)
     {
         var list = new List<INPUT>();
