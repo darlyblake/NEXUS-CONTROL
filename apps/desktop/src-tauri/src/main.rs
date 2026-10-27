@@ -363,11 +363,14 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
         if !mac.is_empty() { evidence.push(format!("Adresse MAC présente dans la table des voisins : {}", mac)); }
         if manufacturer != "Non identifié" { evidence.push(format!("Fabricant associé au préfixe MAC dans la base locale Nmap : {}", manufacturer)); }
         evidence.push("Hôte détecté par découverte réseau ; aucun scan de ports n'a été lancé".to_string());
-        let device_type = if ["smart-tv", "smarttv", "television", "android-tv", "roku", "chromecast", "firetv", "tv-", "box"].iter().any(|v| host_lower.contains(v)) {
+        let device_type = if ["smart-tv", "smarttv", "television", "android-tv", "roku", "chromecast", "firetv", "tv-"].iter().any(|v| lower.contains(v)) {
             "tv"
-        } else if ["router", "gateway", "access-point", "access point", "mikrotik", "tp-link", "tplink", "cisco", "netgear"].iter().any(|v| host_lower.contains(v)) {
+        } else if ["router", "gateway", "access-point", "access point", "mikrotik", "tp-link", "tplink", "cisco", "netgear"].iter().any(|v| lower.contains(v)) {
             "network"
         } else if ["android", "iphone", "ipad", "phone", "mobile", "tecno", "infinix", "itel", "galaxy", "pixel", "redmi", "xiaomi", "oppo", "vivo", "huawei"].iter().any(|v| host_lower.contains(v)) {
+            "phone"
+        } else if ["tecno", "infinix", "itel", "redmi", "xiaomi", "oppo", "vivo"].iter().any(|v| manufacturer.to_lowercase().contains(v)) {
+            // These manufacturer names are a clue, not proof; keep the label explicitly probabilistic.
             "phone"
         } else if !hostname.is_empty() {
             "computer"
@@ -375,15 +378,17 @@ fn scan_network_devices() -> Result<Vec<NetworkDevice>, String> {
             "unknown"
         };
         let kind = match device_type {
-            "phone" => "Téléphone / tablette probable",
+            "phone" => "Téléphone / tablette probable (indices nom/fabricant)",
             "tv" => "Téléviseur / boîtier probable",
             "network" => "Équipement réseau probable",
             "computer" => "Ordinateur probable (nom d'hôte disponible)",
             _ => "Type non identifié",
         }.to_string();
-        let os_guess = if device_type == "phone" && lower.contains("android") { "Android probable" }
+        let os_guess = if device_type == "phone" && (lower.contains("android") || ["tecno", "infinix", "itel", "galaxy", "pixel", "redmi", "xiaomi", "oppo", "vivo"].iter().any(|v| lower.contains(v))) { "Android probable" }
             else if device_type == "computer" && lower.contains("windows") { "Windows probable" }
-            else { "Non déterminé par la découverte sans ports" }.to_string();
+            else if device_type == "computer" && ["ubuntu", "linux", "debian"].iter().any(|v| lower.contains(v)) { "Linux probable" }
+            else if device_type == "computer" && ["macbook", "imac", "mac-mini"].iter().any(|v| lower.contains(v)) { "macOS probable" }
+            else { "Système non confirmé par la découverte réseau" }.to_string();
         NetworkDevice {
             ip, hostname, mac, kind, manufacturer,
             model: "Inconnu — non communiqué par la découverte réseau".to_string(),
