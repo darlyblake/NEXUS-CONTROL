@@ -83,3 +83,11 @@
 .ai-chat-error{display:flex;align-items:flex-start;gap:9px;background:#fff7f5;border:1px solid #f3d8d2;color:#a13f32;border-radius:8px;padding:11px 13px;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
 .ai-chat-error svg{flex-shrink:0;margin-top:1px}
 @media(max-width:1150px){.ai-chat-toolbar{align-items:flex-start;flex-direction:column}.ai-chat-controls{width:100%}.ai-chat-controls select{flex:1;min-width:130px}.ai-chat-panel{height:calc(100vh - 390px)}}
+
+
+/* Commandes vocales de l'assistant local */
+.ai-composer-actions{display:flex;align-items:center;gap:8px}
+.ai-speak-message{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:5px 8px;border:1px solid #dfe7f3;border-radius:6px;background:#fff;color:#476ba9;font-size:10px;cursor:pointer}
+.ai-speak-message:hover{background:#f1f5fc;border-color:#cbd9f1}
+.ai-chat-controls .button[aria-pressed="true"]{background:#eaf2ff;color:#2f5eb6;border-color:#cbdcff}
+@media(max-width:700px){.ai-chat-composer-footer{align-items:flex-start;flex-direction:column}.ai-composer-actions{width:100%;justify-content:flex-end}.ai-chat-controls{align-items:stretch}.ai-chat-controls select{max-width:none;width:100%}}
