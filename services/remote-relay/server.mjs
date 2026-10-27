@@ -275,20 +275,21 @@ wss.on("connection", (ws) => {
       let message;
       try { message = JSON.parse(data.toString("utf8")); } catch { return ws.close(4400, "invalid_message"); }
       if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
-      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", "windows_status", "windows_list_processes", "windows_run_powershell"]);
+      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", "windows_status", "windows_list_processes", "windows_run_powershell", "start_screen_share", "stop_screen_share"]);
       if (message.type === "command") {
-        const windowsAction = typeof message.action === "string" && message.action.startsWith("windows_");
+        const windowsAction = typeof message.action === "string" && (message.action.startsWith("windows_") || message.action === "start_screen_share" || message.action === "stop_screen_share");
         const targetRole = targetRoles.get(identity.pairId) || "android";
         if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
             (windowsAction && targetRole !== "windows") || (!windowsAction && targetRole === "windows") ||
             typeof message.commandId !== "string" || message.commandId.length > 100 ||
             typeof message.timestamp !== "number" || Math.abs(Date.now() - message.timestamp) > 60_000 ||
             (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240)) ||
-            (message.action === "windows_run_powershell" && (typeof message.script !== "string" || message.script.trim().length < 1 || message.script.length > 8000))) {
+            (message.action === "windows_run_powershell" && (typeof message.script !== "string" || message.script.trim().length < 1 || message.script.length > 8000)) ||
+            (message.action === "start_screen_share" && (message.requireLocalConsent !== true || message.settings?.format !== "jpeg" || ![854, 1280, 1600, 1920].includes(message.settings?.width) || ![480, 720, 900, 1080].includes(message.settings?.height) || ![1, 5, 10, 15].includes(message.settings?.fps)))) {
           return ws.close(4403, "invalid_or_unauthorized_command");
         }
       } else if (message.type === "command_result") {
-        const windowsResult = typeof message.action === "string" && message.action.startsWith("windows_");
+        const windowsResult = typeof message.action === "string" && (message.action.startsWith("windows_") || message.action === "start_screen_share" || message.action === "stop_screen_share");
         if (identity.role === "desktop" || !allowedActions.has(message.action) ||
             (identity.role === "windows" && !windowsResult) || (identity.role === "android" && windowsResult) ||
             typeof message.commandId !== "string" || message.commandId.length > 100 ||
