@@ -1269,6 +1269,15 @@ fn agent_workspace_root(raw: &str) -> Result<PathBuf, String> {
     if !root.is_dir() {
         return Err("Le dossier de travail doit être un répertoire existant.".to_string());
     }
+    if root.parent().is_none() {
+        return Err("Pour éviter d'exposer tout le système, choisis un dossier précis, par exemple ton dossier personnel ou un projet, plutôt que la racine du disque.".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    if root.parent() == Some(Path::new("/")) && root.file_name().and_then(|name| name.to_str())
+        .map(|name| ["bin", "boot", "dev", "etc", "lib", "lib64", "proc", "root", "run", "sbin", "sys", "usr", "var"].contains(&name))
+        .unwrap_or(false) {
+        return Err("Ce dossier système est bloqué. Choisis ton dossier personnel ou un dossier de projet.".to_string());
+    }
     Ok(root)
 }
 
