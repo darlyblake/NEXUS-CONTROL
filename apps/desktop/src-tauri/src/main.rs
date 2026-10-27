@@ -1304,8 +1304,132 @@ fn agent_relative_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     }
 }
 
+fn validate_public_http_url(raw: &str) -> Result<String, String> {
+    let parsed = url::Url::parse(raw.trim()).map_err(|_| "URL invalide.".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("Seules les URL http:// et https:// sont autorisées.".to_string());
+    }
+    let host = parsed.host_str().ok_or("Nom d'hôte manquant.")?.to_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") {
+        return Err("Les adresses locales ne sont pas autorisées par l'agent navigateur.".to_string());
+    }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        let blocked = match ip {
+            std::net::IpAddr::V4(v) => v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified() || v.is_broadcast(),
+            std::net::IpAddr::V6(v) => v.is_loopback() || v.is_unspecified() || v.is_unique_local() || v.is_unicast_link_local(),
+        };
+        if blocked { return Err("Les adresses IP privées ou locales sont bloquées.".to_string()); }
+    }
+    Ok(parsed.to_string())
+}
+
+fn open_default_browser(raw_url: &str) -> Result<String, String> {
+    let safe_url = validate_public_http_url(raw_url)?;
+    #[cfg(target_os = "linux")]
+    let result = Command::new("xdg-open").arg(&safe_url).spawn();
+    #[cfg(target_os = "windows")]
+    let result = Command::new("cmd").args(["/C", "start", "", &safe_url]).spawn();
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(&safe_url).spawn();
+    result.map_err(|error| format!("Impossible d'ouvrir le navigateur par défaut : {error}"))?;
+    Ok(format!("Page ouverte dans le navigateur par défaut : {safe_url}. L'agent ne lit pas automatiquement les onglets déjà ouverts."))
+}
+
+fn fetch_public_page(raw_url: &str) -> Result<String, String> {
+    let safe_url = validate_public_http_url(raw_url)?;
+    let output = Command::new("curl")
+        .args(["--location", "--max-time", "15", "--max-filesize", "1000000",
+            "--user-agent", "NEXUS-CONTROL/1.0 (local assistant)", "--silent", "--show-error",
+            "--fail", "--write-out", "\nHTTP_STATUS:%{http_code}", &safe_url])
+        .output().map_err(|error| format!("Impossible de lancer curl : {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Lecture de la page impossible : {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let (html, status) = raw.rsplit_once("\nHTTP_STATUS:").unwrap_or((&raw, "inconnu"));
+    let mut text = String::new();
+    let mut in_tag = false;
+    let mut in_script = false;
+    let mut tag = String::new();
+    for ch in html.chars() {
+        if ch == '<' {
+            in_tag = true;
+            tag.clear();
+        } else if ch == '>' && in_tag {
+            let lower = tag.trim().to_lowercase();
+            if lower.starts_with("script") || lower.starts_with("style") { in_script = true; }
+            if lower.starts_with("/script") || lower.starts_with("/style") { in_script = false; }
+            in_tag = false;
+            text.push(' ');
+        } else if in_tag {
+            tag.push(ch);
+        } else if !in_script {
+            text.push(ch);
+        }
+    }
+    let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let excerpt: String = cleaned.chars().take(12000).collect();
+    Ok(format!("URL: {safe_url}\nHTTP: {status}\nTexte extrait (HTML simplifié, les sites JavaScript peuvent ne pas apparaître) :\n{excerpt}"))
+}
+
+fn search_public_web(query: &str) -> Result<String, String> {
+    let query = query.trim();
+    if query.is_empty() || query.len() > 500 {
+        return Err("La recherche doit contenir entre 1 et 500 caractères.".to_string());
+    }
+    let encoded = url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
+    let url = format!("https://html.duckduckgo.com/html/?q={encoded}");
+    let output = Command::new("curl")
+        .args(["--location", "--max-time", "15", "--max-filesize", "1500000",
+            "--user-agent", "Mozilla/5.0 (compatible; NEXUS-CONTROL/1.0)", "--silent", "--show-error",
+            "--fail", &url])
+        .output().map_err(|error| format!("Impossible de lancer la recherche web : {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Recherche web impossible : {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    let html = String::from_utf8_lossy(&output.stdout);
+    let mut results = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(start) = html[cursor..].find("class=\"result__a\"") {
+        let absolute = cursor + start;
+        let Some(gt_rel) = html[absolute..].find('>') else { break; };
+        let title_start = absolute + gt_rel + 1;
+        let Some(end_rel) = html[title_start..].find("</a>") else { break; };
+        let title = html[title_start..title_start + end_rel].replace("&amp;", "&").replace("&quot;", "\"").replace("&#x27;", "'");
+        let href_start = html[absolute..title_start].find("href=\"").map(|n| absolute + n + 6);
+        let href = href_start.and_then(|s| html[s..].find('"').map(|e| html[s..s + e].to_string())).unwrap_or_default();
+        let end_block = (title_start + end_rel + 4).min(html.len());
+        let block_end = html[end_block..].find("class=\"result__snippet\"").map(|n| end_block + n).unwrap_or(end_block + 700.min(html.len().saturating_sub(end_block)));
+        let snippet = if let Some(s) = html[block_end..].find('>') {
+            let ss = block_end + s + 1;
+            html[ss..].find("</").map(|e| html[ss..ss + e].to_string()).unwrap_or_default()
+        } else { String::new() };
+        let clean = |s: &str| s.replace("&amp;", "&").replace("&quot;", "\"").replace("&#x27;", "'").replace("&lt;", "<").replace("&gt;", ">");
+        results.push(format!("{}. {}\n{}\n{}", results.len()+1, clean(&title), clean(&href), clean(&snippet)));
+        cursor = end_block.max(title_start + end_rel + 4);
+        if results.len() >= 6 || cursor >= html.len() { break; }
+    }
+    if results.is_empty() {
+        Ok(format!("Aucun résultat exploitable n'a été extrait. Tu peux ouvrir la recherche dans le navigateur : https://duckduckgo.com/?q={encoded}"))
+    } else {
+        Ok(format!("Recherche web : {query}\n{}\n\nVérifie les sources avant de leur faire confiance.", results.join("\n\n")))
+    }
+}
+
 fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool) -> Result<String, String> {
     match name {
+        "open_browser" => {
+            let url = args.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            open_default_browser(url)
+        }
+        "web_search" => {
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            search_public_web(query)
+        }
+        "read_web_page" => {
+            let url = args.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            fetch_public_page(url)
+        }
         "list_files" => {
             let relative = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             let dir = if relative == "." || relative.is_empty() {
@@ -1411,6 +1535,18 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
     }
 
     let mut functions = vec![
+        serde_json::json!({"type":"function","function":{
+            "name":"web_search","description":"Rechercher sur le Web public une question ou des mots-clés et retourner des titres, liens et extraits.",
+            "parameters":{"type":"object","properties":{"query":{"type":"string","description":"Question ou mots-clés de recherche"}},"required":["query"]}
+        }}),
+        serde_json::json!({"type":"function","function":{
+            "name":"open_browser","description":"Ouvrir une URL publique http ou https dans le navigateur par défaut de l'ordinateur. Ne pas utiliser pour des pages de connexion, achats ou actions sensibles sans demander l'accord à l'utilisateur.",
+            "parameters":{"type":"object","properties":{"url":{"type":"string","description":"URL publique complète à ouvrir"}},"required":["url"]}
+        }}),
+        serde_json::json!({"type":"function","function":{
+            "name":"read_web_page","description":"Lire le texte simplifié d'une page Web publique en HTTP/HTTPS. Les sites dynamiques peuvent ne pas être pris en charge.",
+            "parameters":{"type":"object","properties":{"url":{"type":"string","description":"URL publique complète"}},"required":["url"]}
+        }}),
         serde_json::json!({"type":"function","function":{
             "name":"list_files","description":"Lister les fichiers et sous-dossiers d'un dossier relatif au dossier de travail autorisé.",
             "parameters":{"type":"object","properties":{"path":{"type":"string","description":"Chemin relatif, '.' pour la racine"}},"required":["path"]}
