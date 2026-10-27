@@ -42,3 +42,23 @@ La synthèse vocale utilise les voix disponibles sur le système. La dictée voc
 - La réponse n'est pas diffusée en continu : l'interface attend la fin de la génération. Les modèles légers sont généralement plus rapides.
 - Si Ollama ne démarre pas automatiquement, vérifie qu'il est installé, que `curl` est disponible et que le port local `11434` n'est pas utilisé par une autre application.
 - Le chat local est distinct d'Aider : il ne modifie pas automatiquement les fichiers du dépôt.
+
+
+## Agent local avec accès aux fichiers
+
+L'onglet **Assistant IA** inclut aussi un agent qui peut appeler des outils locaux via Ollama. Cette fonction est distincte du chat simple.
+
+1. Dans la section **Agent local — fichiers et dossiers**, choisis un modèle Ollama compatible avec l'appel d'outils.
+2. Saisis le chemin absolu d'un dossier existant, par exemple le dossier d'un projet. C'est le périmètre de travail autorisé pour cette requête.
+3. Commence en **lecture seule** : l'agent peut lister les éléments du dossier et lire les fichiers texte.
+4. Pour autoriser la création ou le remplacement de fichiers texte, active **Autoriser l'écriture**. L'application demande une confirmation avant chaque requête avec écriture activée.
+
+### Limites et protections
+
+- L'agent n'accède qu'au dossier explicitement sélectionné. Les chemins absolus fournis comme outils et les tentatives de traversée vers l'extérieur sont refusés.
+- La lecture des fichiers texte est limitée à 1 Mo par fichier ; une liste de dossier est limitée à 150 entrées.
+- L'écriture est limitée à 1 Mo par fichier. Les dossiers parents doivent déjà exister.
+- Il n'y a pas encore de commande de terminal, de suppression de fichier, d'accès administrateur ni d'accès distant accordé à cet agent.
+- L'IA peut proposer du contenu erroné ou dangereux. Relis les modifications importantes et conserve une sauvegarde/version Git de ton projet.
+- Cette version ne dispose pas encore d'une boîte de dialogue native de sélection de dossier ; il faut saisir le chemin absolu manuellement.
+- Le backend utilise l'API locale Ollama et des appels d'outils. Tous les modèles ne prennent pas en charge les outils ; en cas de refus ou d'erreur de format, sélectionne un modèle Ollama compatible avec le tool calling.
