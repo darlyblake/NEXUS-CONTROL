@@ -319,6 +319,25 @@ function App() {
     }
   }, [installingAndroid, refreshLocal]);
 
+  const prepareNetworkAgent = useCallback(async (device: NetworkDevice) => {
+    if (device.deviceType === "phone" || /android/i.test(device.osGuess)) {
+      setNotice("Préparation de l'agent Android : connecte ce téléphone en USB, active le débogage USB et accepte la demande RSA sur le téléphone. L'installation ne sera lancée qu'après cette autorisation.");
+      await buildAndInstallAndroid();
+      return;
+    }
+    if (/windows/i.test(device.osGuess)) {
+      setNotice("PC Windows probable détecté. Ouverture de la page Accès distant pour préparer l'association. L'installation doit être confirmée sur le PC cible ; aucun agent n'est installé silencieusement depuis le réseau.");
+      setPage("remote");
+      return;
+    }
+    if (device.deviceType === "computer") {
+      setNotice("Ordinateur détecté, mais son système n'est pas confirmé. Ouvre Accès distant pour choisir l'agent adapté ; vérifie Windows/Linux sur le PC cible avant l'installation.");
+      setPage("remote");
+      return;
+    }
+    setNotice("Le système de cet appareil n'est pas identifié avec assez de certitude pour choisir un agent. Consulte les indices et confirme son système avant l'installation.");
+  }, [buildAndInstallAndroid]);
+
   const runSecurityAudit = useCallback(async () => {
     if (!isDesktopRuntime()) {
       setNotice("L'audit local nécessite l'application de bureau NEXUS CONTROL.");
@@ -622,7 +641,7 @@ function App() {
           {page === "network" && <section className="page-body">
             <div className="network-hero">
               <div className="network-hero-icon"><Radar size={25}/></div>
-              <div className="network-hero-copy"><h2>Appareils du réseau local</h2><p>Recherche avec Nmap (découverte sans scan de ports), arp-scan si disponible, puis ping et table ARP en secours. Clique sur un appareil pour afficher ses informations et tenter une connexion Android autorisée.</p></div>
+              <div className="network-hero-copy"><h2>Appareils du réseau local</h2><p>Recherche les hôtes joignables sur l'interface réseau active, puis utilise les noms, fabricants et indices disponibles pour estimer leur type. Les actions proposent l'agent adapté ; l'installation distante nécessite toujours une confirmation sur l'appareil cible.</p></div>
               <button className="button button-primary" onClick={() => void scanNetwork()} disabled={networkScanning}><Radar size={16} className={networkScanning ? "spin" : ""}/>{networkScanning ? "Analyse en cours…" : "Lancer l'analyse"}</button>
             </div>
             <div className="network-summary">
@@ -675,7 +694,9 @@ function App() {
                   <div className="network-info-row"><span>Connexion</span><strong>{device.connection || "Réseau local"}</strong></div>
                   <button className="button button-secondary full-button" onClick={() => setExpandedDevice(expandedDevice === device.ip ? null : device.ip)}><CircleHelp size={14}/>{expandedDevice === device.ip ? "Masquer les indices" : "Voir les détails et les indices"}</button>
                   {expandedDevice === device.ip && <div className="network-evidence"><strong>Indices utilisés</strong><ul>{(device.evidence?.length ? device.evidence : ["Aucun indice complémentaire disponible"]).map((item, index) => <li key={index}>{item}</li>)}</ul><p>Le type est une estimation. Le modèle exact reste inconnu tant qu'une source fiable ne le fournit pas.</p></div>}
-                  {!device.connection.includes("ADB") && <button className="button button-primary full-button" disabled={!!connectingIp || device.ip === "—"} onClick={() => void connectNetworkAndroid(device.ip)}>{connectingIp === device.ip ? <><RefreshCw size={14} className="spin"/> Connexion…</> : <><Wifi size={14}/> Tenter la connexion Android</>}</button>}
+                  {!device.connection.includes("ADB") && device.deviceType === "phone" && <button className="button button-primary full-button" disabled={installingAndroid} onClick={() => void prepareNetworkAgent(device)}>{installingAndroid ? <><RefreshCw size={14} className="spin"/> Préparation…</> : <><ArrowDownToLine size={14}/> Préparer l'agent Android</>}</button>}
+                  {!device.connection.includes("ADB") && (device.deviceType === "computer" || /windows/i.test(device.osGuess)) && <button className="button button-primary full-button" onClick={() => void prepareNetworkAgent(device)}><ArrowDownToLine size={14}/> { /windows/i.test(device.osGuess) ? "Préparer l'agent Windows" : "Choisir l'agent du PC" }</button>}
+                  {!device.connection.includes("ADB") && device.deviceType !== "phone" && device.deviceType !== "computer" && <button className="button button-secondary full-button" onClick={() => void prepareNetworkAgent(device)}><CircleHelp size={14}/> Identifier le système avant installation</button>}
                 </article>)}</div>;
               })()}
             </div>
