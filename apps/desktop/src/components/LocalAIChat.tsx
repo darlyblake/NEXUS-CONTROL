@@ -13,6 +13,21 @@ type SpeechRecognitionLike = {
 };
 type SpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
 
+function detectKnownFolderCommand(input: string): string | null {
+  const text = input.toLocaleLowerCase("fr-FR").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  if (!/\\b(ouvre|ouvrir|affiche|montre|accede|va dans|lance)\\b/.test(text) || !/\\b(dossier|repertoire|folder)\\b/.test(text)) return null;
+  const folders: Array<[RegExp, string]> = [
+    [/\\b(musique|music)\\b/, "musique"],
+    [/\\b(documents?|mes documents)\\b/, "documents"],
+    [/\\b(telechargements?|downloads?)\\b/, "telechargements"],
+    [/\\b(images?|photos?|pictures?)\\b/, "images"],
+    [/\\b(videos?)\\b/, "videos"],
+    [/\\b(bureau|desktop)\\b/, "bureau"],
+    [/\\b(dossier personnel|home|accueil)\\b/, "home"],
+  ];
+  return folders.find(([pattern]) => pattern.test(text))?.[1] ?? null;
+}
+
 const SETTINGS_KEY = "nexus.ai.settings";
 function readAgentSettings(): AgentSettings {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as AgentSettings; } catch { return {}; }
@@ -89,7 +104,10 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
     setMessages(conversation); setDraft(""); setSending(true); setError("");
     try {
       let answer: string;
-      if (agentMode) {
+      const knownFolder = detectKnownFolderCommand(content);
+      if (knownFolder) {
+        answer = await invoke<string>("open_known_folder", { name: knownFolder });
+      } else if (agentMode) {
         const config = readAgentSettings();
         const workspace = (config.workspace || "").trim();
         const allowWrite = config.allowWrite === true;
