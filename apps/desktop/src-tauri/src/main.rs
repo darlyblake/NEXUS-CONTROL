@@ -1094,7 +1094,63 @@ struct OllamaChatMessage {
     content: String,
 }
 
+fn ollama_api_ready() -> bool {
+    Command::new("curl")
+        .args(["--fail", "--silent", "--max-time", "2", "http://127.0.0.1:11434/api/tags"])
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn ollama_program() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        candidates.push(home.join(".local/bin/ollama"));
+        candidates.push(home.join("bin/ollama"));
+    }
+    #[cfg(target_os = "linux")]
+    candidates.extend([PathBuf::from("/usr/local/bin/ollama"), PathBuf::from("/usr/bin/ollama")]);
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            candidates.push(PathBuf::from(local).join("Programs/Ollama/ollama.exe"));
+        }
+        candidates.push(PathBuf::from("C:/Program Files/Ollama/ollama.exe"));
+    }
+    candidates.into_iter().find(|path| path.is_file())
+        .or_else(|| if command_exists("ollama") { Some(PathBuf::from("ollama")) } else { None })
+}
+
+fn ensure_ollama_server() -> Result<(), String> {
+    if ollama_api_ready() {
+        return Ok(());
+    }
+    let program = ollama_program().ok_or_else(|| {
+        "Ollama n'est pas installé ou introuvable. Installe Ollama puis relance NEXUS CONTROL.".to_string()
+    })?;
+    Command::new(&program)
+        .arg("serve")
+        .env("OLLAMA_HOST", "127.0.0.1:11434")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| format!("NEXUS CONTROL n'a pas pu démarrer Ollama automatiquement : {error}. Vérifie l'installation d'Ollama."))?;
+
+    // Ollama peut mettre quelques secondes à ouvrir son port. Le modèle n'est pas
+    // chargé ici : il sera chargé uniquement à la première demande de chat.
+    for _ in 0..20 {
+        if ollama_api_ready() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(400));
+    }
+    Err("Ollama a été démarré, mais son API ne répond pas encore sur 127.0.0.1:11434. Vérifie qu'un autre service n'utilise pas ce port et réessaie.".to_string())
+}
+
 fn read_ollama_models() -> Result<Vec<OllamaModel>, String> {
+    ensure_ollama_server()?;
     let output = Command::new("curl")
         .args(["--fail", "--silent", "--show-error", "--max-time", "5", "http://127.0.0.1:11434/api/tags"])
         .output()
@@ -1102,7 +1158,7 @@ fn read_ollama_models() -> Result<Vec<OllamaModel>, String> {
 
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(format!("Ollama ne répond pas sur 127.0.0.1:11434. Lance « ollama serve » dans un terminal. {detail}"));
+        return Err(format!("Impossible de lire les modèles Ollama sur 127.0.0.1:11434. {detail}"));
     }
 
     let payload: serde_json::Value = serde_json::from_slice(&output.stdout)
@@ -1158,7 +1214,8 @@ fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String
         "model": model,
         "messages": messages,
         "stream": false,
-        "options": { "num_ctx": 4096 }
+        "options": { "num_ctx": 4096 },
+        "keep_alive": "5m"
     }).to_string();
 
     let mut child = Command::new("curl")
