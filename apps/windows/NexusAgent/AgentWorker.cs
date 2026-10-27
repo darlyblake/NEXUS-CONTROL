@@ -142,6 +142,19 @@ public sealed class AgentWorker : BackgroundService
         {
             switch (action)
             {
+                case "start_screen_share":
+                case "stop_screen_share":
+                    // The service runs in Session 0 and cannot capture the signed-in user's
+                    // interactive desktop. Do not pretend that a stream started; a separate
+                    // interactive-session companion and IPC channel are required.
+                    await SendJsonAsync(socket, new
+                    {
+                        type = "screen_share_error",
+                        commandId,
+                        message = "Le partage d’écran n’est pas encore installé sur cet agent Windows : le compagnon de session interactive est manquant."
+                    }, ct);
+                    return;
+
                 case "windows_status":
                     ok = true;
                     detail = "status";
