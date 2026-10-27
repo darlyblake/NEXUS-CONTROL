@@ -154,6 +154,26 @@ struct NetworkDevice {
 fn local_ipv4() -> Result<String, String> {
     #[cfg(target_os = "linux")]
     {
+        // Prefer the source address selected by the default route. This avoids
+        // accidentally scanning Docker/VPN bridges before the actual Wi-Fi interface.
+        if let Ok(route) = Command::new("ip").args(["route", "get", "1.1.1.1"]).output() {
+            let stdout = String::from_utf8_lossy(&route.stdout);
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if let Some(index) = parts.iter().position(|part| *part == "src") {
+                    if let Some(ip) = parts.get(index + 1) {
+                        if ip.parse::<std::net::Ipv4Addr>().is_ok()
+                            && !ip.starts_with("127.")
+                            && !ip.starts_with("169.254.")
+                        {
+                            return Ok((*ip).to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback for hosts without a default route.
         let output = Command::new("ip").args(["-o", "-f", "inet", "addr", "show", "scope", "global"])
             .output().map_err(|error| format!("Impossible de lire les interfaces réseau : {error}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
