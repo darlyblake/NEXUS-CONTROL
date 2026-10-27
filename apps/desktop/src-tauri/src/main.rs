@@ -1157,7 +1157,8 @@ fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String
     let body = serde_json::json!({
         "model": model,
         "messages": messages,
-        "stream": false
+        "stream": false,
+        "options": { "num_ctx": 4096 }
     }).to_string();
 
     let mut child = Command::new("curl")
