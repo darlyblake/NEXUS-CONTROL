@@ -53,7 +53,7 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
   return <section className="page-body ai-agent-page">
     <div className="panel ai-agent-permissions">
       <div className="panel-header">
-        <div><h3><FileText size={16} /> Agent local — fichiers et dossiers</h3><p>L'IA peut utiliser des outils pour examiner et, si tu l'autorises, modifier les fichiers de ce dossier.</p></div>
+        <div><h3><FileText size={16} /> Agent local — fichiers et dossiers</h3><p>L'IA peut analyser l'écran sur demande, rechercher sur le Web, ouvrir des pages publiques et travailler dans le dossier autorisé.</p></div>
         <button className="button button-secondary" onClick={() => void refreshModels()} disabled={busy}><RefreshCw size={14}/> Modèles</button>
       </div>
       <div className="ai-agent-settings">
@@ -83,11 +83,11 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
 
     <div className="panel ai-agent-chat">
       <div className="panel-header">
-        <div><h3><Bot size={17}/> Demande à l'agent</h3><p>Exemples : « liste les fichiers du dossier », « lis README.md », « crée un fichier notes.txt avec… ».</p></div>
+        <div><h3><Bot size={17}/> Demande à l'agent</h3><p>Exemples : « analyse ce qui est affiché à l’écran », « recherche les nouveautés React sur Internet », « ouvre https://example.com », « lis README.md », « crée notes.txt avec… ».</p></div>
         <button className="button button-secondary" type="button" disabled={busy || messages.length === 0} onClick={() => { setMessages([]); setError(""); setNotice(""); }}><Trash2 size={14}/> Effacer</button>
       </div>
       <div className="ai-agent-messages" aria-live="polite">
-        {messages.length === 0 && <div className="ai-chat-empty"><div className="ai-chat-empty-icon"><Bot size={24}/></div><h2>Un agent qui agit sur les fichiers autorisés</h2><p>Commence en lecture seule. Active l'écriture uniquement lorsque tu veux vraiment que l'IA modifie ce dossier.</p></div>}
+        {messages.length === 0 && <div className="ai-chat-empty"><div className="ai-chat-empty-icon"><Bot size={24}/></div><h2>Un agent local : écran, Web et fichiers</h2><p>Demande une capture d’écran, une recherche Web ou l’ouverture d’une page. Active l’écriture uniquement si tu veux modifier des fichiers.</p></div>}
         {messages.map(message => <article className={"ai-message " + (message.role === "user" ? "ai-message-user" : "ai-message-assistant")} key={message.id}>
           <div className="ai-message-avatar">{message.role === "user" ? "T" : <Bot size={17}/>}</div>
           <div className="ai-message-content"><div className="ai-message-author">{message.role === "user" ? "Toi" : model || "Agent local"}</div><p className="ai-agent-message-text">{message.content}</p></div>
