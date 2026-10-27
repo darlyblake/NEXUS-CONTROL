@@ -215,7 +215,7 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
         </button>
       </div>
       <div className="remote-input-status"><ScrollText size={15} /><span>{lastAction}</span></div>
-      <p className="remote-input-note">Ce panneau attend les messages du compagnon Windows interactif. Le service Windows en Session 0 ne peut pas, à lui seul, contrôler la session graphique. Tant que le compagnon et le routage du relais ne sont pas installés, les commandes ne sont pas opérationnelles.</p>
+      <p className="remote-input-note">Le compagnon Windows et le routage de contrôle sont présents dans cette branche, mais le relais ne transporte pas encore le flux vidéo. La souris reste donc désactivée jusqu’à réception d’une vraie image ; la saisie de texte est disponible après approbation locale. Les builds et tests de bout en bout restent à valider.</p>
     </section>
   );
 }
