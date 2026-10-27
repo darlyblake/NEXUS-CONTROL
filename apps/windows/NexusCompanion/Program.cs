@@ -90,7 +90,7 @@ internal sealed class CompanionApplication : ApplicationContext
 
     private void ShowStatus()
     {
-        if (_statusForm is { IsDisposed: false }) { _statusForm.Activate(); return; }
+        if (_statusForm is { IsDisposed: false }) { if (!_statusForm.Visible) _statusForm.Show(); _statusForm.Activate(); return; }
         _statusForm = new ControlStatusForm(() => StopControl("Arrêt demandé depuis le panneau Windows."));
         _statusForm.SetState(_activeControlId is null ? "Compagnon connecté — aucun contrôle actif" : "CONTRÔLE DISTANT ACTIF", _activeControlId is not null);
         _statusForm.Show();
@@ -307,6 +307,7 @@ internal sealed class ControlStatusForm : Form
 {
     private readonly Label _label;
     private readonly Button _stop;
+    private bool _active;
 
     public ControlStatusForm(Action stop)
     {
@@ -322,12 +323,13 @@ internal sealed class ControlStatusForm : Form
         _stop.Click += (_, _) => stop();
         Controls.Add(_stop);
         Controls.Add(_label);
-        FormClosing += (_, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
+        FormClosing += (_, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; if (!_active) Hide(); } };
     }
 
     public void SetState(string text, bool active)
     {
         if (InvokeRequired) { BeginInvoke(new Action(() => SetState(text, active))); return; }
+        _active = active;
         _label.Text = text;
         BackColor = active ? Color.MistyRose : SystemColors.Control;
         _stop.Enabled = active;
