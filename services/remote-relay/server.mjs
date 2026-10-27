@@ -260,7 +260,9 @@ wss.on("connection", (ws) => {
     }
     if (ws.readyState !== WebSocket.OPEN) return;
     const peers = socketsByPair.get(identity.pairId);
-    const otherRole = identity.role === "desktop" ? "android" : "desktop";
+    const otherRole = identity.role === "desktop"
+      ? (targetRoles.get(identity.pairId) || identity.targetRole || "android")
+      : "desktop";
     const other = peers?.get(otherRole);
     if (!other || other.readyState !== WebSocket.OPEN) {
       if (!isBinary) ws.send(JSON.stringify({ type: "peer_status", role: otherRole, connected: false }));
@@ -305,7 +307,9 @@ wss.on("connection", (ws) => {
     const peers = socketsByPair.get(identity.pairId);
     if (peers?.get(identity.role) === ws) {
       peers.delete(identity.role);
-      const otherRole = identity.role === "desktop" ? "android" : "desktop";
+      const otherRole = identity.role === "desktop"
+      ? (targetRoles.get(identity.pairId) || identity.targetRole || "android")
+      : "desktop";
       const other = peers.get(otherRole);
       if (other && other.readyState === WebSocket.OPEN) {
         other.send(JSON.stringify({ type: "peer_status", role: identity.role, connected: false }));
