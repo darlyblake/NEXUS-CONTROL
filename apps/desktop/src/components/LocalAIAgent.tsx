@@ -32,7 +32,7 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
     event.preventDefault();
     const text = draft.trim();
     if (!text || !model || busy) return;
-    if (!workspace.trim()) { setError("Indique d'abord le dossier que l'IA est autorisée à lire."); return; }
+    if (!workspace.trim() && (!browserEnabled || allowWrite)) { setError("Indique un dossier autorisé pour lire ou modifier des fichiers. Pour une tâche limitée au navigateur, laisse l'écriture désactivée et active Autoriser le navigateur."); return; }
     if (allowWrite && !window.confirm("Autoriser l'IA à créer ou remplacer des fichiers texte dans ce dossier ? Les modifications ne seront pas automatiquement annulées.")) return;
     if (browserEnabled && !window.confirm("Autoriser cette requête à piloter un navigateur dédié : ouvrir des sites publics, lire la page, cliquer sur des éléments non sensibles et remplir des champs ? Les formulaires ne seront pas soumis automatiquement.")) return;
 
@@ -66,8 +66,8 @@ export function LocalAIAgent({ runtime }: { runtime: boolean }) {
             {models.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
           </select>
         </label>
-        <label className="ai-agent-field">Dossier autorisé (chemin absolu)
-          <input value={workspace} onChange={event => setWorkspace(event.target.value)} placeholder="/home/ton-utilisateur/Projets/mon-projet" spellCheck={false} disabled={busy}/>
+        <label className="ai-agent-field">Dossier autorisé (chemin absolu, facultatif pour navigateur seul)
+          <input value={workspace} onChange={event => setWorkspace(event.target.value)} placeholder="/home/ton-utilisateur/Projets/mon-projet — vide si navigateur seul" spellCheck={false} disabled={busy}/>
         </label>
         <div className="ai-agent-permission-row">
           <div className={"ai-agent-permission-icon " + (allowWrite ? "danger" : "")}>{allowWrite ? <ShieldAlert size={18}/> : <ShieldCheck size={18}/>}</div>
