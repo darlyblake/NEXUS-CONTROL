@@ -137,7 +137,7 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
     onNotice?.("Demande d’arrêt envoyée. Le compagnon Windows doit également terminer la session.");
   };
 
-  const sendPointer = (event: ReactPointerEvent<HTMLDivElement>, action: "move" | "click") => {
+  const sendPointer = (event: ReactPointerEvent<HTMLDivElement>, action: "move" | "click", button: "left" | "right" = "left") => {
     const surface = surfaceRef.current;
     const image = imageRef.current;
     if (!active || !frameUrl || !surface || !image || !image.naturalWidth || !image.naturalHeight) return;
@@ -153,7 +153,7 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
     const x = localX / shownWidth;
     const y = localY / shownHeight;
     if (action === "click") {
-      send("mouse_click", { x, y, button: "left" });
+      send("mouse_click", { x, y, button });
       return;
     }
     moveRef.current = { x, y };
@@ -202,7 +202,8 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
         role="application"
         aria-label="Écran Windows partagé et zone de contrôle souris"
         onPointerMove={(event) => sendPointer(event, "move")}
-        onClick={(event) => sendPointer(event as unknown as ReactPointerEvent<HTMLDivElement>, "click")}
+        onClick={(event) => sendPointer(event as unknown as ReactPointerEvent<HTMLDivElement>, "click", "left")}
+        onContextMenu={(event) => { event.preventDefault(); sendPointer(event as unknown as ReactPointerEvent<HTMLDivElement>, "click", "right"); }}
         onWheel={(event) => { if (active && frameUrl) { event.preventDefault(); send("mouse_scroll", { deltaX: Math.round(event.deltaX), deltaY: Math.round(event.deltaY) }); } }}
       >
         {frameUrl ? <img ref={imageRef} src={frameUrl} alt="Écran Windows partagé" draggable={false} /> : <div className="remote-input-empty"><Monitor size={30} /><strong>Flux écran non disponible</strong><span>La souris reste désactivée jusqu’à réception d’une image Windows. Le transport vidéo du relais n’est pas encore disponible.</span></div>}
