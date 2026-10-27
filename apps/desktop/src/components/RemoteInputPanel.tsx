@@ -46,6 +46,13 @@ export function RemoteInputPanel({ socket, connected, onNotice }: RemoteInputPan
       }
       let message: InputMessage;
       try { message = JSON.parse(event.data) as InputMessage; } catch { return; }
+      if (message.type === "peer_status" && message.role === "windows_ui" && message.connected === false) {
+        setRequestPending(false);
+        setActive(false);
+        setSessionId("");
+        setText("");
+        setLastAction("Compagnon Windows déconnecté ; contrôle arrêté.");
+      }
       if (message.type === "screen_share_stopped" || message.type === "screen_share_error") {
         setFrameUrl((old) => { if (old) URL.revokeObjectURL(old); return null; });
       }
