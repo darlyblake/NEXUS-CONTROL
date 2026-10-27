@@ -62,3 +62,17 @@ L'onglet **Assistant IA** inclut aussi un agent qui peut appeler des outils loca
 - L'IA peut proposer du contenu erroné ou dangereux. Relis les modifications importantes et conserve une sauvegarde/version Git de ton projet.
 - Cette version ne dispose pas encore d'une boîte de dialogue native de sélection de dossier ; il faut saisir le chemin absolu manuellement.
 - Le backend utilise l'API locale Ollama et des appels d'outils. Tous les modèles ne prennent pas en charge les outils ; en cas de refus ou d'erreur de format, sélectionne un modèle Ollama compatible avec le tool calling.
+
+
+## Analyse de l'écran et navigation Web
+
+L'agent local propose maintenant trois outils supplémentaires :
+
+- **Analyser l'écran** : sur demande explicite, l'application capture l'écran principal de l'ordinateur, réduit la capture si ImageMagick est disponible, puis transmet l'image au modèle Ollama. Il faut un modèle compatible vision et une session graphique active. Sur Linux, un outil de capture comme `gnome-screenshot`, `scrot`, `grim` ou ImageMagick est nécessaire.
+- **Rechercher sur Internet** : interroge DuckDuckGo et renvoie les titres, liens et extraits trouvés. Les résultats doivent être vérifiés à la source.
+- **Lire une page Web** : récupère et simplifie le texte d'une URL publique HTTP/HTTPS. Les pages qui dépendent fortement de JavaScript peuvent ne pas être lisibles.
+- **Ouvrir dans le navigateur** : lance l'URL publique demandée dans le navigateur par défaut du système.
+
+### Limites de navigation
+
+Cette première version n'automatise pas encore les clics, la saisie dans les formulaires ni le contrôle des onglets déjà ouverts. Elle ouvre les URL dans le navigateur, peut lire le texte public récupérable par HTTP et peut analyser une capture d'écran ponctuelle. Les adresses localhost et les adresses IP privées sont bloquées pour la lecture/ouverture Web. L'agent n'envoie pas de formulaires, n'effectue pas d'achat et ne se connecte pas à des comptes.
