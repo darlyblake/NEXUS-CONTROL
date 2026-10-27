@@ -981,6 +981,70 @@ fn install_app_update() -> Result<String, String> {
 
 
 #[tauri::command]
+fn open_known_folder(name: String) -> Result<String, String> {
+    let key = name.trim().to_lowercase();
+    let (xdg_key, localized, english) = match key.as_str() {
+        "music" | "musique" => ("MUSIC", "Musique", "Music"),
+        "documents" | "document" => ("DOCUMENTS", "Documents", "Documents"),
+        "downloads" | "download" | "téléchargements" | "telechargements" => ("DOWNLOAD", "Téléchargements", "Downloads"),
+        "pictures" | "picture" | "images" | "image" | "photos" => ("PICTURES", "Images", "Pictures"),
+        "videos" | "video" | "vidéos" | "vidéo" => ("VIDEOS", "Vidéos", "Videos"),
+        "desktop" | "bureau" => ("DESKTOP", "Bureau", "Desktop"),
+        "home" | "accueil" | "personnel" | "dossier personnel" => ("", "", ""),
+        _ => return Err("Dossier non reconnu. Essaie Musique, Documents, Téléchargements, Images, Vidéos, Bureau ou dossier personnel.".to_string()),
+    };
+
+    let home = std::env::var_os("HOME").map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+        .ok_or("Impossible de déterminer le dossier personnel de cet utilisateur.")?;
+
+    let path = if xdg_key.is_empty() {
+        home.clone()
+    } else {
+        #[cfg(target_os = "linux")]
+        {
+            let xdg_path = Command::new("xdg-user-dir").arg(xdg_key).output().ok()
+                .filter(|output| output.status.success())
+                .map(|output| PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()))
+                .filter(|path| path.is_dir());
+            xdg_path.or_else(|| {
+                [localized, english].iter().map(|folder| home.join(folder)).find(|path| path.is_dir())
+            }).ok_or_else(|| format!("Le dossier {} est introuvable dans le dossier personnel.", localized))?
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let windows_folder = match xdg_key {
+                "MUSIC" => "Music", "DOCUMENTS" => "Documents", "DOWNLOAD" => "Downloads",
+                "PICTURES" => "Pictures", "VIDEOS" => "Videos", "DESKTOP" => "Desktop", _ => english,
+            };
+            let candidate = home.join(windows_folder);
+            if !candidate.is_dir() { return Err(format!("Le dossier {} est introuvable.", localized)); }
+            candidate
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let mac_folder = match xdg_key {
+                "MUSIC" => "Music", "DOCUMENTS" => "Documents", "DOWNLOAD" => "Downloads",
+                "PICTURES" => "Pictures", "VIDEOS" => "Movies", "DESKTOP" => "Desktop", _ => english,
+            };
+            let candidate = home.join(mac_folder);
+            if !candidate.is_dir() { return Err(format!("Le dossier {} est introuvable.", localized)); }
+            candidate
+        }
+    };
+
+    #[cfg(target_os = "linux")]
+    let result = Command::new("xdg-open").arg(&path).spawn();
+    #[cfg(target_os = "windows")]
+    let result = Command::new("explorer").arg(&path).spawn();
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(&path).spawn();
+
+    result.map(|_| format!("Ouverture du dossier : {}", path.display()))
+        .map_err(|error| format!("Impossible d'ouvrir le dossier {} : {error}", path.display()))
+}
+
+#[tauri::command]
 fn open_remote_console(url: String) -> Result<String, String> {
     let parsed = url::Url::parse(url.trim())
         .map_err(|_| "Adresse de serveur invalide.".to_string())?;
@@ -1721,6 +1785,7 @@ fn main() {
             check_app_update,
             install_app_update,
             open_remote_console,
+            open_known_folder,
             get_security_audit,
             list_ollama_models,
             ollama_chat,
