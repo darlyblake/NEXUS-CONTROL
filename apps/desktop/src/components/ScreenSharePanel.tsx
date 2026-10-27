@@ -14,6 +14,7 @@ type ScreenSharePanelProps = {
  * before this panel displays frames. Binary WebSocket messages are JPEG frames.
  */
 export function ScreenSharePanel({ socket, connected, onNotice }: ScreenSharePanelProps) {
+  const screenShareTransportReady = false; // Relay/companion JPEG transport is not implemented in this branch.
   const [sharing, setSharing] = useState(false);
   const [width, setWidth] = useState("1280");
   const [height, setHeight] = useState("720");
@@ -62,7 +63,7 @@ export function ScreenSharePanel({ socket, connected, onNotice }: ScreenSharePan
   }, [frameUrl]);
 
   const start = () => {
-    if (!connected || !socket || socket.readyState !== WebSocket.OPEN || pendingStart.current || sharing) return;
+    if (!screenShareTransportReady || !connected || !socket || socket.readyState !== WebSocket.OPEN || pendingStart.current || sharing) return;
     pendingStart.current = true;
     socket.send(JSON.stringify({
       type: "command",
@@ -145,7 +146,7 @@ export function ScreenSharePanel({ socket, connected, onNotice }: ScreenSharePan
         <span>{frameCount} images reçues</span>
         <span>{lastFrameAt ? "Dernière image : " + new Date(lastFrameAt).toLocaleTimeString() : "En attente du flux"}</span>
       </div>
-      <p className="screen-share-note">Le panneau nécessite le compagnon Windows de session interactive et le relais compatibles avec les messages <code>start_screen_share</code>, <code>stop_screen_share</code> et les trames JPEG binaires. Sans ces composants, aucun écran distant ne sera capturé.</p>
+      <p className="screen-share-note">Le flux JPEG et son routage dans le relais ne sont pas encore implémentés. Le démarrage est désactivé pour éviter de fermer la connexion distante avec une commande non prise en charge. Tant que ce transport n’est pas ajouté et testé, aucune image d’écran ne sera reçue et la souris distante reste désactivée.</p>
     </section>
   );
 }

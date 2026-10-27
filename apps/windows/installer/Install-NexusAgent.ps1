@@ -22,8 +22,12 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 $source = (Resolve-Path -LiteralPath $PublishDirectory).Path
 $executable = Join-Path $source 'NexusAgent.exe'
+$companionSource = Join-Path $source 'companion\NexusControlCompanion.exe'
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw "NexusAgent.exe introuvable dans : $source"
+}
+if (-not (Test-Path -LiteralPath $companionSource -PathType Leaf)) {
+    throw "NexusControlCompanion.exe introuvable dans : $companionSource. Télécharge l'artefact complet du workflow Windows Agent."
 }
 
 Write-Host ''
@@ -69,13 +73,16 @@ try {
 } catch {
     throw "Association refusée. Vérifie l-URL, le code, son expiration et la connexion HTTPS. Détail : $($_.Exception.Message)"
 }
-if (-not $pair.deviceToken -or -not $pair.pairId) {
-    throw 'Le relais n-a pas renvoyé les informations attendues ; le service ne sera pas installé.'
+if (-not $pair.deviceToken -or -not $pair.pairId -or -not $pair.companionToken -or -not $pair.companionDeviceId) {
+    throw 'Le relais doit prendre en charge le jeton séparé du compagnon Windows interactif. Mets à jour le relais avant l’installation.'
 }
 
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
 Copy-Item -Path (Join-Path $source '*') -Destination $installDirectory -Recurse -Force
+$companionDirectory = Join-Path $installDirectory 'Companion'
+New-Item -ItemType Directory -Path $companionDirectory -Force | Out-Null
+Copy-Item -Path (Join-Path $source 'companion\*') -Destination $companionDirectory -Recurse -Force
 
 # Restrict agent configuration to SYSTEM and local Administrators.
 $acl = New-Object System.Security.AccessControl.DirectorySecurity
@@ -87,6 +94,9 @@ $propagation = [System.Security.AccessControl.PropagationFlags]::None
 $allow = [System.Security.AccessControl.AccessControlType]::Allow
 $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($systemSid, 'FullControl', $inheritance, $propagation, $allow)))
 $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, 'FullControl', $inheritance, $propagation, $allow)))
+$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+# Permit directory traversal only; the service token file remains protected by its own ACL.
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($userSid, 'ReadAndExecute', 'None', 'None', $allow)))
 Set-Acl -LiteralPath $configDirectory -AclObject $acl
 
 $config = @{
@@ -104,6 +114,23 @@ $protectedFileAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSy
 $protectedFileAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, 'FullControl', 'Allow')))
 Set-Acl -LiteralPath $configPath -AclObject $protectedFileAcl
 
+# Companion credentials are readable only by SYSTEM, administrators, and the installing user.
+$companionConfigPath = Join-Path $configDirectory 'companion.json'
+$companionConfig = @{
+    RelayUrl = $RelayUrl
+    DeviceId = [string]$pair.companionDeviceId
+    DeviceToken = [string]$pair.companionToken
+    PairId = [string]$pair.pairId
+} | ConvertTo-Json
+[System.IO.File]::WriteAllText($companionConfigPath, $companionConfig, (New-Object System.Text.UTF8Encoding($false)))
+$companionAcl = Get-Acl -LiteralPath $companionConfigPath
+$companionAcl.SetAccessRuleProtection($true, $false)
+$companionAcl.SetOwner($adminsSid)
+$companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($systemSid, 'FullControl', 'Allow')))
+$companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, 'FullControl', 'Allow')))
+$companionAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($userSid, 'Read', 'Allow')))
+Set-Acl -LiteralPath $companionConfigPath -AclObject $companionAcl
+
 $installedExecutable = Join-Path $installDirectory 'NexusAgent.exe'
 if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
     Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
@@ -120,7 +147,18 @@ sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/res
 sc.exe failureflag $serviceName 1 | Out-Null
 
 Start-Service -Name $serviceName
+
+# Start the visible companion at the installing user's next sign-in. It is not a hidden service.
+$companionExecutable = Join-Path $companionDirectory 'NexusControlCompanion.exe'
+$runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+New-Item -Path $runKey -Force | Out-Null
+Set-ItemProperty -Path $runKey -Name 'NexusControlCompanion' -Value ('"' + $companionExecutable + '"')
+if ([Environment]::UserInteractive) {
+    Start-Process -FilePath $companionExecutable
+}
+
 Get-Service -Name $serviceName | Format-Table Name, Status, StartType
 Write-Host "Appareil associé : $deviceId"
+Write-Host "Compagnon interactif : $companionExecutable"
 Write-Host "PowerShell distant : $EnableRemoteShell"
-Write-Host 'Le service n-ouvre aucun port entrant. Il se connecte au relais en sortie via WSS.'
+Write-Host 'Le service utilise WSS en sortie. Le compagnon affiche une demande locale et un indicateur visible pour toute session de contrôle.'

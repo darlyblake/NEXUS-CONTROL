@@ -198,7 +198,16 @@ const server = createServer(async (req, res) => {
       if (record.pairId === pairing.pairId && record.role === "desktop") record.targetRole = role;
     }
     tokens.set(hash(deviceToken), { pairId: pairing.pairId, deviceId, role, expiresAt });
-    return json(res, 200, { protocol: 1, pairId: pairing.pairId, deviceToken, role, expiresAt: new Date(expiresAt).toISOString() });
+    // Windows interactive input is a separate, visible companion in the signed-in user session.
+    // It receives a distinct token and role; the background service token cannot impersonate it.
+    let companionToken;
+    let companionDeviceId;
+    if (platform === "windows") {
+      companionToken = randomToken();
+      companionDeviceId = deviceId + "-ui";
+      tokens.set(hash(companionToken), { pairId: pairing.pairId, deviceId: companionDeviceId, role: "windows_ui", expiresAt });
+    }
+    return json(res, 200, { protocol: 1, pairId: pairing.pairId, deviceToken, role, ...(companionToken ? { companionToken, companionDeviceId } : {}), expiresAt: new Date(expiresAt).toISOString() });
   }
   if (req.method === "GET" && url.pathname === "/") {
     return json(res, 200, { service: "NEXUS CONTROL remote relay", protocol: 1, health: "/health" });
@@ -256,47 +265,96 @@ wss.on("connection", (ws) => {
       } else {
         ws.send(JSON.stringify({ type: "peer_status", role: otherRole, connected: false }));
       }
+      if (identity.role === "windows_ui") {
+        const desktop = peers.get("desktop");
+        if (desktop && desktop.readyState === WebSocket.OPEN) desktop.send(JSON.stringify({ type: "peer_status", role: "windows_ui", connected: true }));
+      }
+      if (identity.role === "desktop") {
+        const companion = peers.get("windows_ui");
+        ws.send(JSON.stringify({ type: "peer_status", role: "windows_ui", connected: !!companion && companion.readyState === WebSocket.OPEN }));
+      }
       return;
     }
     if (ws.readyState !== WebSocket.OPEN) return;
     const peers = socketsByPair.get(identity.pairId);
-    const otherRole = identity.role === "desktop" ? "android" : "desktop";
-    const other = peers?.get(otherRole);
-    if (!other || other.readyState !== WebSocket.OPEN) {
-      if (!isBinary) ws.send(JSON.stringify({ type: "peer_status", role: otherRole, connected: false }));
-      return;
+    if (isBinary) {
+      // This relay version deliberately rejects opaque binary frames. Screen streaming
+      // requires its own bounded, authenticated protocol and is not part of this change.
+      return ws.close(4403, "binary_frames_not_enabled");
     }
-    // The relay forwards opaque payloads only; it cannot interpret commands or files.
-    if (isBinary) other.send(data, { binary: true });
-    else {
-      if (data.length > MAX_JSON_BYTES) return ws.close(4400, "message_too_large");
-      let message;
-      try { message = JSON.parse(data.toString("utf8")); } catch { return ws.close(4400, "invalid_message"); }
-      if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
-      const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", "windows_status", "windows_list_processes", "windows_run_powershell"]);
-      if (message.type === "command") {
-        const windowsAction = typeof message.action === "string" && message.action.startsWith("windows_");
-        const targetRole = targetRoles.get(identity.pairId) || "android";
-        if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
-            (windowsAction && targetRole !== "windows") || (!windowsAction && targetRole === "windows") ||
-            typeof message.commandId !== "string" || message.commandId.length > 100 ||
-            typeof message.timestamp !== "number" || Math.abs(Date.now() - message.timestamp) > 60_000 ||
-            (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240)) ||
-            (message.action === "windows_run_powershell" && (typeof message.script !== "string" || message.script.trim().length < 1 || message.script.length > 8000))) {
-          return ws.close(4403, "invalid_or_unauthorized_command");
-        }
-      } else if (message.type === "command_result") {
-        const windowsResult = typeof message.action === "string" && message.action.startsWith("windows_");
-        if (identity.role === "desktop" || !allowedActions.has(message.action) ||
-            (identity.role === "windows" && !windowsResult) || (identity.role === "android" && windowsResult) ||
-            typeof message.commandId !== "string" || message.commandId.length > 100 ||
-            (typeof message.detail === "string" && message.detail.length > 2000) ||
-            (typeof message.output === "string" && message.output.length > 12000)) {
-          return ws.close(4403, "invalid_or_unauthorized_result");
-        }
+    if (data.length > MAX_JSON_BYTES) return ws.close(4400, "message_too_large");
+    let message;
+    try { message = JSON.parse(data.toString("utf8")); } catch { return ws.close(4400, "invalid_message"); }
+    if (!message || typeof message.type !== "string" || message.type === "auth") return ws.close(4400, "invalid_message");
+
+    const controlActions = new Set(["windows_control_request", "windows_control_stop", "windows_remote_input"]);
+    const windowsActions = new Set(["windows_status", "windows_list_processes", "windows_run_powershell"]);
+    const allowedActions = new Set(["location_request", "ring_start", "ring_stop", "show_message", ...windowsActions, ...controlActions]);
+    let otherRole = identity.role === "desktop" ? (targetRoles.get(identity.pairId) || identity.targetRole || "android") : "desktop";
+    if (message.type === "command") {
+      const isControl = controlActions.has(message.action);
+      if (isControl && identity.role === "desktop") otherRole = "windows_ui";
+      const other = peers?.get(otherRole);
+      const isWindowsCommand = windowsActions.has(message.action);
+      const isTargetWindows = targetRoles.get(identity.pairId) === "windows";
+      if (identity.role !== "desktop" || !allowedActions.has(message.action) ||
+          (isWindowsCommand && !isTargetWindows) ||
+          (isControl && !isTargetWindows) ||
+          (!isWindowsCommand && !isControl && isTargetWindows) ||
+          typeof message.commandId !== "string" || message.commandId.length < 1 || message.commandId.length > 100 ||
+          typeof message.timestamp !== "number" || Math.abs(Date.now() - message.timestamp) > 60_000 ||
+          (isControl && message.action === "windows_control_request" && message.requireLocalConsent !== true) ||
+          (message.action === "show_message" && (typeof message.message !== "string" || message.message.trim().length < 1 || message.message.length > 240)) ||
+          (message.action === "windows_run_powershell" && (typeof message.script !== "string" || message.script.trim().length < 1 || message.script.length > 8000)) ||
+          (message.action === "windows_remote_input" && (
+            typeof message.controlId !== "string" || message.controlId.length > 100 ||
+            !message.input || typeof message.input !== "object" ||
+            !new Set(["mouse_move", "mouse_click", "mouse_scroll", "keyboard_text"]).has(message.input.action) ||
+            (message.input.action === "keyboard_text" && (typeof message.input.text !== "string" || message.input.text.length > 2000)) ||
+            (["mouse_move", "mouse_click"].includes(message.input.action) &&
+              (typeof message.input.x !== "number" || !Number.isFinite(message.input.x) || message.input.x < 0 || message.input.x > 1 ||
+               typeof message.input.y !== "number" || !Number.isFinite(message.input.y) || message.input.y < 0 || message.input.y > 1)) ||
+            (message.input.action === "mouse_click" && message.input.button !== undefined && !new Set(["left", "right"]).has(message.input.button)) ||
+            (message.input.action === "mouse_scroll" &&
+              ((message.input.deltaX !== undefined && (!Number.isInteger(message.input.deltaX) || Math.abs(message.input.deltaX) > 1200)) ||
+               (message.input.deltaY !== undefined && (!Number.isInteger(message.input.deltaY) || Math.abs(message.input.deltaY) > 1200))))
+          ))) {
+        return ws.close(4403, "invalid_or_unauthorized_command");
+      }
+      if (!other || other.readyState !== WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "peer_status", role: otherRole, connected: false }));
+        return;
       }
       other.send(data, { binary: false });
+      return;
     }
+
+    if (message.type === "command_result") {
+      const windowsResult = typeof message.action === "string" && (windowsActions.has(message.action) || controlActions.has(message.action));
+      if (identity.role === "desktop" || !allowedActions.has(message.action) ||
+          (identity.role === "windows" && !windowsActions.has(message.action)) ||
+          (identity.role === "windows_ui" && !controlActions.has(message.action)) ||
+          (identity.role === "android" && windowsResult) ||
+          typeof message.commandId !== "string" || message.commandId.length > 100 ||
+          (typeof message.detail === "string" && message.detail.length > 2000) ||
+          (typeof message.output === "string" && message.output.length > 12000)) {
+        return ws.close(4403, "invalid_or_unauthorized_result");
+      }
+      const other = peers?.get("desktop");
+      if (other && other.readyState === WebSocket.OPEN) other.send(data, { binary: false });
+      return;
+    }
+
+    // Only the desktop and a paired endpoint can exchange defined status messages.
+    if (message.type === "control_session_pending" || message.type === "control_session_started" ||
+        message.type === "control_session_stopped" || message.type === "control_session_denied" ||
+        message.type === "control_session_error") {
+      if (identity.role !== "windows_ui") return ws.close(4403, "unauthorized_control_status");
+      const other = peers?.get("desktop");
+      if (other && other.readyState === WebSocket.OPEN) other.send(data, { binary: false });
+      return;
+    }
+    return ws.close(4403, "unsupported_message_type");
   });
 
   ws.on("close", () => {
@@ -305,10 +363,14 @@ wss.on("connection", (ws) => {
     const peers = socketsByPair.get(identity.pairId);
     if (peers?.get(identity.role) === ws) {
       peers.delete(identity.role);
-      const otherRole = identity.role === "desktop" ? "android" : "desktop";
+      const otherRole = identity.role === "desktop" ? (targetRoles.get(identity.pairId) || "android") : "desktop";
       const other = peers.get(otherRole);
       if (other && other.readyState === WebSocket.OPEN) {
         other.send(JSON.stringify({ type: "peer_status", role: identity.role, connected: false }));
+      }
+      if (identity.role === "windows_ui" || identity.role === "desktop") {
+        const desktop = peers.get("desktop");
+        if (desktop && desktop.readyState === WebSocket.OPEN) desktop.send(JSON.stringify({ type: "peer_status", role: "windows_ui", connected: false }));
       }
       if (peers.size === 0) socketsByPair.delete(identity.pairId);
     }

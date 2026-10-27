@@ -6,6 +6,7 @@ $serviceName = 'NexusControlAgent'
 $installDirectory = Join-Path $env:ProgramFiles 'NEXUS CONTROL\Agent'
 $configDirectory = Join-Path $env:ProgramData 'NEXUS CONTROL\Agent'
 $configPath = Join-Path $configDirectory 'agent.json'
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -16,6 +17,9 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 if (-not $PSCmdlet.ShouldProcess($serviceName, 'Arrêter et supprimer le service NEXUS CONTROL Agent')) {
     return
 }
+
+Remove-ItemProperty -Path $runKey -Name 'NexusControlCompanion' -ErrorAction SilentlyContinue
+Get-Process -Name 'NexusControlCompanion' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
     Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue

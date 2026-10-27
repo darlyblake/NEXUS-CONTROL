@@ -8,12 +8,13 @@ Agent Windows natif du projet principal NEXUS CONTROL. Il fonctionne comme **ser
 - Connexion WSS sortante vers le relais configuré ; aucun port entrant d'administration n'est ouvert.
 - Association par code temporaire à usage unique avec confirmation locale pendant l'installation.
 - Actions distantes : état du PC, inventaire simple des processus et scripts PowerShell optionnels.
+- Compagnon graphique séparé, lancé à la connexion de l'utilisateur, avec demande d'autorisation explicite, indicateur visible et bouton d'arrêt pour le contrôle souris/clavier.
 - Révocation de l'association pendant la désinstallation si le relais est joignable.
 - Workflow GitHub Actions qui compile et publie l'agent Windows x64.
 
 ## Limites actuelles — à ne pas confondre avec les fonctions futures
 
-Le contrôle souris/clavier, le streaming d'écran, le transfert de fichiers par le relais et l'installation automatique par simple découverte réseau ne sont pas encore intégrés. Le relais MVP garde ses associations en mémoire : un redémarrage du relais invalide les sessions et nécessite une nouvelle association. Les jetons d'accès sont temporaires ; cette version n'est pas encore un système RMM de production.
+Le contrôle souris/clavier est en cours d'intégration : le compagnon Windows et le protocole de relais sont présents dans la branche de travail, mais doivent réussir les builds et tests de bout en bout avant usage. Le streaming d'écran et le transfert de fichiers par le relais ne sont pas encore intégrés. L'installation automatique par simple découverte réseau n'est pas disponible. Le relais MVP garde ses associations en mémoire : un redémarrage du relais invalide les sessions et nécessite une nouvelle association. Les jetons d'accès sont temporaires ; cette version n'est pas encore un système RMM de production.
 
 ## Prérequis de développement
 
@@ -45,6 +46,12 @@ Le workflow **Windows Agent** publie également l'artefact `nexus-agent-windows-
 6. Le service démarre automatiquement avec Windows. Le panneau Accès distant de NEXUS CONTROL affiche les commandes Windows lorsque l'agent est connecté.
 
 Les identifiants sont stockés dans ProgramData avec des ACL limitées à SYSTEM et aux administrateurs. Le service initie une connexion WSS sortante et n'ajoute aucune règle de pare-feu entrant.
+
+## Compagnon interactif et contrôle distant
+
+Le compagnon graphique se lance dans la session utilisateur et demande une approbation locale avant chaque session. Pendant le contrôle, une fenêtre visible reste disponible avec un bouton d'arrêt ; le menu de l'icône de notification propose également l'arrêt. Le contrôle s'arrête lors du verrouillage ou de la déconnexion de la session, de la perte du relais ou de la fermeture locale du compagnon. Le compagnon n'autorise que déplacement/clic souris, défilement et saisie de texte ; il ne contrôle pas l'écran sécurisé/UAC. Le retour vidéo de l'écran distant doit être opérationnel pour que le pointage soit utilisable visuellement.
+
+Le build CI et les tests Windows doivent réussir avant de considérer cette fonction comme prête.
 
 ## PowerShell distant : avertissement important
 
