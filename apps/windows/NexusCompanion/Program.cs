@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text;
