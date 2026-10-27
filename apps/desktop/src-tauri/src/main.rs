@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod browser_control;
+
 use serde::{Deserialize, Serialize};
 use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::{Component, Path, PathBuf}, process::{Command, Stdio}, time::Duration};
 
@@ -1480,8 +1482,14 @@ fn search_public_web(query: &str) -> Result<String, String> {
     }
 }
 
-fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool) -> Result<String, String> {
+fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool, browser_enabled: bool) -> Result<String, String> {
+    if matches!(name, "browser_start" | "browser_navigate" | "browser_snapshot" | "browser_click" | "browser_fill") && !browser_enabled { return Err("Le contrôle du navigateur n'a pas été autorisé dans l'interface.".to_string()); }
     match name {
+        "browser_start" => browser_control::start(),
+        "browser_navigate" => browser_control::navigate(args.get("url").and_then(|v| v.as_str()).unwrap_or("")),
+        "browser_snapshot" => browser_control::snapshot(),
+        "browser_click" => browser_control::click(args.get("selector").and_then(|v| v.as_str()).unwrap_or("")),
+        "browser_fill" => browser_control::fill(args.get("selector").and_then(|v| v.as_str()).unwrap_or(""), args.get("value").and_then(|v| v.as_str()).unwrap_or("")),
         "capture_screen" => capture_screen_for_vision(),
         "open_browser" => {
             let url = args.get("url").and_then(|v| v.as_str()).unwrap_or("");
@@ -1572,7 +1580,7 @@ fn ollama_agent_request(body: &str) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_root: String, allow_write: bool) -> Result<String, String> {
+fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_root: String, allow_write: bool, browser_enabled: bool) -> Result<String, String> {
     let model = model.trim();
     if model.is_empty() || model.len() > 200 {
         return Err("Sélectionne un modèle Ollama installé.".to_string());
@@ -1625,6 +1633,16 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
             "parameters":{"type":"object","properties":{"path":{"type":"string","description":"Chemin relatif du fichier"}},"required":["path"]}
         }})
     ];
+    if browser_enabled {
+        functions.extend([
+            serde_json::json!({"type":"function","function":{"name":"browser_start","description":"Démarrer Chrome/Chromium contrôlé dans un profil dédié séparé des onglets personnels.","parameters":{"type":"object","properties":{},"required":[]}}}),
+            serde_json::json!({"type":"function","function":{"name":"browser_navigate","description":"Naviguer dans l'onglet contrôlé vers une URL publique HTTP ou HTTPS.","parameters":{"type":"object","properties":{"url":{"type":"string","description":"URL complète du site public"}},"required":["url"]}}}),
+            serde_json::json!({"type":"function","function":{"name":"browser_snapshot","description":"Lire le titre, l'URL, le texte visible et les sélecteurs CSS des liens, boutons et champs de la page.","parameters":{"type":"object","properties":{},"required":[]}}}),
+            serde_json::json!({"type":"function","function":{"name":"browser_click","description":"Cliquer sur un élément non sensible avec un sélecteur CSS. Ne pas valider ni soumettre un formulaire, acheter, payer ou supprimer.","parameters":{"type":"object","properties":{"selector":{"type":"string","description":"Sélecteur CSS de l'élément"}},"required":["selector"]}}}),
+            serde_json::json!({"type":"function","function":{"name":"browser_fill","description":"Remplir un champ de formulaire sans soumettre le formulaire. Valeur acceptée : input, textarea, select ou zone éditable.","parameters":{"type":"object","properties":{"selector":{"type":"string","description":"Sélecteur CSS du champ"},"value":{"type":"string","description":"Valeur à saisir"}},"required":["selector","value"]}}})
+        ]);
+    }
+
     if allow_write {
         functions.push(serde_json::json!({"type":"function","function":{
             "name":"write_file","description":"Créer ou remplacer un fichier texte dans le dossier de travail autorisé. Ne pas écraser un fichier sans que l'utilisateur l'ait demandé.",
@@ -1654,7 +1672,7 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
             let function = call.get("function").ok_or("Appel d'outil mal formé.")?;
             let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let args = function.get("arguments").cloned().unwrap_or(serde_json::Value::Null);
-            let result = execute_agent_tool(name, &args, &root, allow_write)
+            let result = execute_agent_tool(name, &args, &root, allow_write, browser_enabled)
                 .unwrap_or_else(|error| format!("Erreur outil : {error}"));
             if name == "capture_screen" {
                 if let Some(image_data) = result.strip_prefix("NEXUS_SCREENSHOT_BASE64:") {
