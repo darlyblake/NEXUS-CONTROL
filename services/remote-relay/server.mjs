@@ -314,6 +314,7 @@ wss.on("connection", (ws) => {
             (["mouse_move", "mouse_click"].includes(message.input.action) &&
               (typeof message.input.x !== "number" || !Number.isFinite(message.input.x) || message.input.x < 0 || message.input.x > 1 ||
                typeof message.input.y !== "number" || !Number.isFinite(message.input.y) || message.input.y < 0 || message.input.y > 1)) ||
+            (message.input.action === "mouse_click" && message.input.button !== undefined && !new Set(["left", "right"]).has(message.input.button)) ||
             (message.input.action === "mouse_scroll" &&
               ((message.input.deltaX !== undefined && (!Number.isInteger(message.input.deltaX) || Math.abs(message.input.deltaX) > 1200)) ||
                (message.input.deltaY !== undefined && (!Number.isInteger(message.input.deltaY) || Math.abs(message.input.deltaY) > 1200))))
