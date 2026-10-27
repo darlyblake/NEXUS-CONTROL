@@ -13,6 +13,8 @@ type InputMessage = {
   action?: string;
   message?: string;
   controlId?: string;
+  role?: string;
+  connected?: boolean;
   x?: number;
   y?: number;
 };
