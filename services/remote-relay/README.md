@@ -19,7 +19,7 @@ npm run dev
 
 Le contrôle de santé est disponible sur `http://localhost:8787/health`. Pour une utilisation réelle, placer le service derrière un proxy TLS et utiliser exclusivement `https://` et `wss://`.
 
-## Protocole HTTP
+## Vérifier le relais\n\nDepuis ce dossier, `npm test` lance un test d’intégration qui démarre un relais local, crée une association PC/Windows, authentifie les deux côtés et vérifie le routage d’une commande Windows autorisée et de sa réponse. Le serveur envoie aussi des ping WebSocket toutes les 25 secondes et ferme les sockets qui ne répondent plus.\n\n## Protocole HTTP
 
 1. Le client PC envoie `POST /api/pair` avec `{"deviceId":"pc-<identifiant>" }`. La réponse contient un code à usage unique valable cinq minutes, un `pairId` et un jeton secret pour le PC.
 2. Le téléphone envoie `POST /api/pair/redeem` avec `{"pairCode":"<code>","deviceId":"android-<identifiant>" }`. Le code ne peut être utilisé qu'une seule fois. La réponse contient le jeton secret du téléphone.
