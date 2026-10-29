@@ -1571,9 +1571,41 @@ fn search_public_web(query: &str) -> Result<String, String> {
     }
 }
 
-fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool, browser_enabled: bool) -> Result<String, String> {
+fn run_agent_terminal(action: &str, root: &Path) -> Result<String, String> {
+    // Commandes prédéfinies uniquement : aucun shell, aucune commande arbitraire,
+    // aucun argument fourni librement par le modèle.
+    let (program, args): (&str, &[&str]) = match action {
+        "pwd" => if cfg!(target_os = "windows") { ("cmd", &["/C", "cd"]) } else { ("pwd", &[]) },
+        "git_status" => ("git", &["status", "--short", "--branch"]),
+        "git_diff_stat" => ("git", &["diff", "--stat"]),
+        "git_log" => ("git", &["log", "-5", "--oneline"]),
+        "npm_build" => if cfg!(target_os = "windows") { ("cmd", &["/C", "npm.cmd", "run", "build"]) } else { ("npm", &["run", "build"]) },
+        "npm_test" => if cfg!(target_os = "windows") { ("cmd", &["/C", "npm.cmd", "test", "--", "--run"]) } else { ("npm", &["test", "--", "--run"]) },
+        "cargo_check" => ("cargo", &["check"]),
+        "cargo_test" => ("cargo", &["test"]),
+        "node_version" => ("node", &["--version"]),
+        "python_version" => if cfg!(target_os = "windows") { ("py", &["--version"]) } else { ("python3", &["--version"]) },
+        "system_info" => if cfg!(target_os = "windows") { ("cmd", &["/C", "ver"]) } else { ("uname", &["-a"]) },
+        _ => return Err("Action terminal inconnue ou non autorisée. Actions disponibles : pwd, git_status, git_diff_stat, git_log, npm_build, npm_test, cargo_check, cargo_test, node_version, python_version, system_info.".to_string()),
+    };
+    let output = Command::new(program).args(args).current_dir(root).output()
+        .map_err(|error| format!("Impossible de lancer {program} : {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, if stderr.is_empty() { String::new() } else { format!("\\n[stderr]\\n{stderr}") });
+    let excerpt: String = combined.chars().take(20_000).collect();
+    if output.status.success() {
+        Ok(format!("Commande terminée (code 0) dans {}\\n{}", root.display(), excerpt.trim()))
+    } else {
+        Err(format!("Commande terminée avec le code {:?} dans {}\\n{}", output.status.code(), root.display(), excerpt.trim()))
+    }
+}
+
+fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_write: bool, browser_enabled: bool, terminal_enabled: bool) -> Result<String, String> {
     if matches!(name, "browser_start" | "browser_navigate" | "browser_snapshot" | "browser_click" | "browser_fill") && !browser_enabled { return Err("Le contrôle du navigateur n'a pas été autorisé dans l'interface.".to_string()); }
+    if name == "run_terminal" && !terminal_enabled { return Err("L'accès au terminal n'a pas été autorisé dans l'interface.".to_string()); }
     match name {
+        "run_terminal" => run_agent_terminal(args.get("action").and_then(|v| v.as_str()).unwrap_or(""), root),
         "browser_start" => browser_control::start(),
         "browser_navigate" => browser_control::navigate(args.get("url").and_then(|v| v.as_str()).unwrap_or("")),
         "browser_snapshot" => browser_control::snapshot(),
@@ -1648,7 +1680,7 @@ fn execute_agent_tool(name: &str, args: &serde_json::Value, root: &Path, allow_w
 
 fn ollama_agent_request(body: &str) -> Result<serde_json::Value, String> {
     let mut child = Command::new("curl")
-        .args(["--fail", "--silent", "--show-error", "--max-time", "180",
+        .args(["--fail", "--silent", "--show-error", "--max-time", "600",
             "-H", "Content-Type: application/json", "--data-binary", "@-",
             "http://127.0.0.1:11434/api/chat"])
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
@@ -1669,7 +1701,7 @@ fn ollama_agent_request(body: &str) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_root: String, allow_write: bool, browser_enabled: bool) -> Result<String, String> {
+fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_root: String, allow_write: bool, browser_enabled: bool, terminal_enabled: bool) -> Result<String, String> {
     let model = model.trim();
     if model.is_empty() || model.len() > 200 {
         return Err("Sélectionne un modèle Ollama installé.".to_string());
@@ -1728,6 +1760,14 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
             "parameters":{"type":"object","properties":{"path":{"type":"string","description":"Chemin relatif du fichier"}},"required":["path"]}
         }})
     ];
+    if terminal_enabled {
+        functions.push(serde_json::json!({"type":"function","function":{
+            "name":"run_terminal",
+            "description":"Exécuter une action prédéfinie dans le dossier de travail autorisé. Aucun shell ni commande arbitraire. Actions : pwd, git_status, git_diff_stat, git_log, npm_build, npm_test, cargo_check, cargo_test, node_version, python_version, system_info. Choisir uniquement l'action utile à la demande.",
+            "parameters":{"type":"object","properties":{"action":{"type":"string","enum":["pwd","git_status","git_diff_stat","git_log","npm_build","npm_test","cargo_check","cargo_test","node_version","python_version","system_info"]}},"required":["action"]}
+        }}));
+    }
+
     if browser_enabled {
         functions.extend([
             serde_json::json!({"type":"function","function":{"name":"browser_start","description":"Démarrer Chrome/Chromium contrôlé dans un profil dédié séparé des onglets personnels.","parameters":{"type":"object","properties":{},"required":[]}}}),
@@ -1767,7 +1807,7 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
             let function = call.get("function").ok_or("Appel d'outil mal formé.")?;
             let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let args = function.get("arguments").cloned().unwrap_or(serde_json::Value::Null);
-            let result = execute_agent_tool(name, &args, &root, allow_write, browser_enabled)
+            let result = execute_agent_tool(name, &args, &root, allow_write, browser_enabled, terminal_enabled)
                 .unwrap_or_else(|error| format!("Erreur outil : {error}"));
             if name == "capture_screen" {
                 if let Some(image_data) = result.strip_prefix("NEXUS_SCREENSHOT_BASE64:") {
