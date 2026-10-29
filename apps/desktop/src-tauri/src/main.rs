@@ -1289,16 +1289,16 @@ fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String
         if !matches!(message.role.as_str(), "user" | "assistant" | "system") {
             return Err("Rôle de message invalide.".to_string());
         }
-        if message.content.trim().is_empty() || message.content.chars().count() > 12_000 {
-            return Err("Chaque message doit contenir du texte et ne pas dépasser 12 000 caractères.".to_string());
+        if message.content.trim().is_empty() || message.content.chars().count() > 100_000 {
+            return Err("Chaque message doit contenir du texte et ne pas dépasser 100 000 caractères, pièces jointes comprises.".to_string());
         }
         if message.images.len() > 4 || message.images.iter().any(|image| image.len() > 11_200_000) {
             return Err("Images refusées : maximum 4 images de 8 Mo chacune.".to_string());
         }
         total_chars += message.content.chars().count();
     }
-    if total_chars > 50_000 {
-        return Err("La conversation est trop longue pour cette requête. Efface l'historique et réessaie.".to_string());
+    if total_chars > 160_000 {
+        return Err("La conversation dépasse la limite de 160 000 caractères. Efface l’historique et réessaie.".to_string());
     }
 
     let installed = read_ollama_models()?;
