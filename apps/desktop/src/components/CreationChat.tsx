@@ -96,7 +96,7 @@ async function exportDocument(file: NonNullable<ChatItem["file"]>) {
     const slide = pptx.addSlide();
     slide.background = { color: "FFFFFF" };
     slide.addText(chunk.heading, { x: 0.65, y: 0.45, w: 12, h: 0.65, fontFace: "Aptos Display", fontSize: 25, bold: true, color: "244A83" });
-    slide.addText(chunk.body.join("\n"), { x: 0.8, y: 1.45, w: 11.6, h: 5.1, fontFace: "Aptos", fontSize: 17, color: "26364D", breakLine: false, paraSpaceAfterPt: 12, valign: "top", fit: "shrink" });
+    slide.addText(chunk.body.join("\n"), { x: 0.8, y: 1.45, w: 11.6, h: 5.1, fontFace: "Aptos", fontSize: 17, color: "26364D", breakLine: false, paraSpaceAfter: 12, valign: "top", fit: "shrink" });
     slide.addText("NEXUS CONTROL", { x: 10.6, y: 7.05, w: 2, h: 0.2, fontSize: 8, color: "8290A3", align: "right" });
   }
   await pptx.writeFile({ fileName: file.name + ".pptx" });
