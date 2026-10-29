@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { AdaptiveMessage } from "./AdaptiveMessage";
 import { Bot, CircleAlert, Mic, MicOff, RefreshCw, Send, Sparkles, UserRound, Volume2, VolumeX, Wrench, MessageSquare, Trash2 } from "lucide-react";
 
 type OllamaModel = { name: string; size?: number };
@@ -162,7 +163,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
             </div>}
             {messages.map(message => <article className={`ai-message ${message.role === "user" ? "ai-message-user" : "ai-message-assistant"}`} key={message.id}>
               <div className="ai-message-avatar">{message.role === "user" ? <UserRound size={16}/> : <Bot size={17}/>}</div>
-              <div className="ai-message-content"><div className="ai-message-author">{message.role === "user" ? "Toi" : model || "Assistant IA"}</div><p>{message.content}</p>
+              <div className="ai-message-content"><div className="ai-message-author">{message.role === "user" ? "Toi" : model || "Assistant IA"}</div>{message.role === "assistant" ? <AdaptiveMessage content={message.content} /> : <p>{message.content}</p>}
                 {message.role === "assistant" && <button className="ai-speak-message" type="button" onClick={() => speak(message.content)} title="Lire cette réponse à voix haute"><Volume2 size={14}/> Écouter</button>}
               </div>
             </article>)}
