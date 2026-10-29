@@ -149,7 +149,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
       } else {
         answer = await invoke<string>("ollama_chat", {
           model,
-          messages: conversation.map(({ role, content: text }) => ({ role, content: text }))
+          messages: requestMessages
         });
       }
       setMessages(current => [...current, { role: "assistant", content: answer, id: Date.now() + 1 }]);
