@@ -3,15 +3,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { ScreenSharePanel } from "./components/ScreenSharePanel";
 import { LocalAIChat } from "./components/LocalAIChat";
 import { LocalAISettings } from "./components/LocalAIAgent";
+import { CreatorStudio } from "./components/CreatorStudio";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
   HardDrive, LayoutDashboard, Link2, LockKeyhole, Monitor, MonitorSmartphone,
   MoreHorizontal, Network, Plus, Radar, RefreshCw, Search, Settings2, ShieldCheck,
-  Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert
+  Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert, ImagePlus
 } from "lucide-react";
 
-type Page = "overview" | "assistant" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
+type Page = "overview" | "assistant" | "creator" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
@@ -21,6 +22,7 @@ type UpdateInfo = { currentVersion: string; version: string; downloadUrl: string
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
   { id: "assistant", label: "Assistant IA", icon: Bot },
+  { id: "creator", label: "Documents & images", icon: ImagePlus },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
   { id: "files", label: "Transfert de fichiers", icon: Folder },
   { id: "remote", label: "Accès distant", icon: Link2 },
@@ -38,6 +40,7 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
   assistant: { title: "Assistant IA", subtitle: "Chat local et agent IA avec accès contrôlé aux fichiers de cet ordinateur." },
+  creator: { title: "Documents & images", subtitle: "Génère des documents avec l’IA locale et crée des images avec un fournisseur compatible." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
   files: { title: "Transfert de fichiers", subtitle: "Échanges de fichiers entre appareils compatibles ; ADB Android est le premier connecteur disponible." },
   remote: { title: "Accès distant", subtitle: "Connecte un PC, un appareil Android ou un appareil Apple selon les fonctions autorisées par son système." },
@@ -468,6 +471,7 @@ function App() {
           {notice && <div className="notice-line"><span className="notice-indicator"><AlertCircle size={15}/></span><span>{notice}</span>{updateAvailable && <button className="button button-primary button-small" disabled={installingUpdate} onClick={() => void installAppUpdate()}>{installingUpdate ? "Installation…" : "Installer la mise à jour"}</button>}<button aria-label="Fermer le message" onClick={() => setNotice("")}>×</button></div>}
 
           {page === "assistant" && <LocalAIChat runtime={runtime} /> }
+          {page === "creator" && <CreatorStudio runtime={runtime} /> }
 
           {page === "overview" && <section className="page-body">
             <div className="welcome-panel">
