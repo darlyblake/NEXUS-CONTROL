@@ -162,8 +162,13 @@ export function CreatorStudio({ runtime }: { runtime: boolean }) {
           <button type="button" className="creator-primary" onClick={() => void generateDocument()} disabled={busy || !prompt.trim()}>{busy ? <LoaderCircle className="creator-spin" size={16}/> : <Sparkles size={16}/>} {busy ? "Génération en cours…" : "Générer le document"}</button>
           {message && <p className="creator-status" role="status">{message}</p>}
         </section>
-        <section className="creator-panel creator-output-panel">
+        <section className="creator-panel creator-output-panel" aria-busy={busy}>
           <div className="creator-panel-heading"><FileText size={17}/><div><h3>Contenu et export</h3><p>Modifie le résultat avant de le télécharger.</p></div></div>
+          {busy && <div className="creator-loading-card" role="status" aria-live="polite">
+            <div className="creator-loading-title"><LoaderCircle size={19} className="creator-spin"/><div><strong>Le modèle rédige ton document</strong><span>Analyse des consignes et préparation du contenu…</span></div></div>
+            <div className="creator-skeleton-lines" aria-hidden="true"><i/><i/><i/><i/><i/></div>
+            <p>La génération peut prendre un moment selon la puissance du modèle. Tu peux patienter : le résultat apparaîtra ici.</p>
+          </div>}
           <textarea className="creator-document-editor" aria-label="Contenu du document" value={content} onChange={e => setContent(e.target.value)} placeholder="Le document généré apparaîtra ici. Tu peux aussi saisir ou coller ton texte." rows={17}/>
           <div className="creator-export-row"><label>Format d’export<select value={format} onChange={e => setFormat(e.target.value as DocumentFormat)}>{Object.entries(FORMAT_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}<option value="pdf">PDF (impression)</option></select></label><button type="button" className="creator-primary" onClick={() => format === ("pdf" as DocumentFormat) ? openPrintView(title, content) : exportDocument()} disabled={!content.trim()}>{format === ("pdf" as DocumentFormat) ? <Printer size={16}/> : <Download size={16}/>} Exporter</button></div>
           <p className="creator-small-note">PDF : la fenêtre d’impression du système permet de choisir « Enregistrer au format PDF ». Le format Word .doc est compatible HTML, pas un fichier .docx natif.</p>
@@ -180,9 +185,9 @@ export function CreatorStudio({ runtime }: { runtime: boolean }) {
           {imageError && <p className="creator-error" role="alert">{imageError}</p>}
           <p className="creator-small-note">Nécessite un fournisseur, un modèle et une clé API compatibles. L’URL doit accepter les requêtes de l’application (CORS). Les coûts éventuels dépendent du fournisseur.</p>
         </section>
-        <section className="creator-panel creator-image-output">
+        <section className="creator-panel creator-image-output" aria-busy={imageBusy}>
           <div className="creator-panel-heading"><ImagePlus size={17}/><div><h3>Résultat de l’image</h3><p>Affiche puis télécharge l’image générée.</p></div></div>
-          {imageResult ? <><img className="creator-generated-image" src={imageResult} alt="Image générée par le service configuré"/><div className="creator-export-row"><button type="button" className="creator-secondary" onClick={() => window.open(imageResult, "_blank", "noopener,noreferrer")}>Ouvrir l’image</button><button type="button" className="creator-primary" onClick={() => void downloadImage()}><Download size={16}/> Télécharger PNG</button></div></> : <div className="creator-image-empty"><ImagePlus size={34}/><strong>Aucune image générée</strong><span>Décris ton image et configure le service pour commencer.</span></div>}
+          {imageBusy ? <div className="creator-image-loading" role="status" aria-live="polite"><div className="creator-image-loading-art"><div className="creator-image-loading-orb"><Sparkles size={26}/></div><LoaderCircle size={22} className="creator-spin"/></div><strong>Création de ton image…</strong><span>Le service prépare l’image. Cela peut prendre quelques instants.</span><div className="creator-image-progress"><i/></div></div> : imageResult ? <><img className="creator-generated-image" src={imageResult} alt="Image générée par le service configuré"/><div className="creator-export-row"><button type="button" className="creator-secondary" onClick={() => window.open(imageResult, "_blank", "noopener,noreferrer")}>Ouvrir l’image</button><button type="button" className="creator-primary" onClick={() => void downloadImage()}><Download size={16}/> Télécharger PNG</button></div></> : <div className="creator-image-empty"><ImagePlus size={34}/><strong>Aucune image générée</strong><span>Décris ton image et configure le service pour commencer.</span></div>}
         </section>
       </div>}
     </section>
