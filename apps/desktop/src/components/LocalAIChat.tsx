@@ -137,10 +137,10 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
     for (const file of Array.from(files)) {
       if (attachments.length + next.length >= 4) { setError("Limite : 4 pièces jointes par message."); break; }
       if (file.size > 20 * 1024 * 1024) { setError(file.name + " dépasse la limite de 20 Mo."); continue; }
-      if (/\\.(pdf|docx)$/i.test(file.name)) {
+      if (/\.(pdf|docx)$/i.test(file.name)) {
         try {
           const extracted = await extractOfficeDocument(file);
-          next.push({ name: file.name, kind: "text", content: "[Document extrait automatiquement : " + file.name + "]\\n" + extracted.slice(0, 75_000) });
+          next.push({ name: file.name, kind: "text", content: "[Document extrait automatiquement : " + file.name + "]\n" + extracted.slice(0, 75_000) });
         } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
       } else if (file.type.startsWith("image/")) {
         if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setError(file.name + " : formats image acceptés : PNG, JPEG et WebP."); continue; }
