@@ -70,7 +70,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
 }
 
 export function AdaptiveMessage({ content }: Props) {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  // Some small local models escape Markdown punctuation (\\#, \\|, \\-, \\`), which would otherwise render as literal text. Normalize those escapes before parsing.\n  const normalizedContent = content.replace(/\\\\([#|*_+>~])/g, "$1").replace(/\\\\-/g, "-").replace(/\\\\`/g, "`").replace(/&#x20;/g, " ");\n  const lines = normalizedContent.replace(/\\r\\n/g, "\\n").split("\\n");
   const blocks: ReactNode[] = [];
   let i = 0;
   let key = 0;
