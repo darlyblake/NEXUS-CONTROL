@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AdaptiveMessage } from "./AdaptiveMessage";
-import { Bot, CircleAlert, Mic, MicOff, RefreshCw, Send, Sparkles, UserRound, Volume2, VolumeX, Wrench, MessageSquare, Trash2 } from "lucide-react";
+import { Bot, Check, CircleAlert, Copy, Mic, MicOff, RefreshCw, Send, Sparkles, UserRound, Volume2, VolumeX, Wrench, MessageSquare, Trash2 } from "lucide-react";
 
 type OllamaModel = { name: string; size?: number };
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number };
@@ -45,6 +45,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
   const [voiceReplies, setVoiceReplies] = useState(false);
   const [listening, setListening] = useState(false);
   const [agentMode, setAgentMode] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +77,16 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, sending]);
   useEffect(() => () => { window.speechSynthesis?.cancel(); recognitionRef.current?.stop(); }, []);
 
+  const copyMessage = async (message: ChatMessage) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedMessageId(message.id);
+      window.setTimeout(() => setCopiedMessageId(current => current === message.id ? null : current), 1400);
+    } catch {
+      setError("Impossible de copier le texte. Vérifie les autorisations du presse-papiers.");
+    }
+  };
+
   const toggleVoiceInput = () => {
     if (listening) { recognitionRef.current?.stop(); setListening(false); return; }
     const speechWindow = window as SpeechWindow;
@@ -102,6 +113,20 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
 
     const userMessage: ChatMessage = { role: "user", content, id: Date.now() };
     const conversation = [...messages, userMessage].slice(-24);
+    const systemInstruction = [
+      "Tu es l'assistant intégré à NEXUS CONTROL. Réponds dans la langue de l'utilisateur, de façon claire et utile.",
+      "Formate les réponses avec Markdown : titres courts, listes, tableaux Markdown quand ils améliorent la compréhension, et blocs de code avec le langage indiqué.",
+      "Quand une fiche structurée est réellement utile, produis un bloc fenced ```nexus-card contenant un objet JSON avec title (texte), description (texte facultatif), status (texte facultatif), fields (tableau facultatif d'objets label/value). Exemple :",
+      "```nexus-card\n{\n  \"title\": \"Ordinateur\",\n  \"status\": \"Connecté\",\n  \"fields\": [{\"label\": \"Système\", \"value\": \"Ubuntu\"}]\n}\n```",
+      "Quand un graphique simple apporte de la valeur, produis un bloc fenced ```nexus-chart avec un objet JSON contenant title, labels (tableau de textes), values (tableau de nombres de même longueur) et unit (facultatif). Exemple :",
+      "```nexus-chart\n{\n  \"title\": \"Ventes\",\n  \"labels\": [\"Janvier\", \"Février\"],\n  \"values\": [12, 18],\n  \"unit\": \"\u00a0FCFA\"\n}\n```",
+      "N'utilise ces blocs personnalisés que si cela convient à la demande. Le JSON doit être valide, sans commentaire. N'invente jamais de données présentées comme réelles : indique clairement les exemples fictifs.",
+      "N'émets pas de HTML brut. Pour les images, utilise une image Markdown uniquement si tu disposes d'une URL pertinente ; n'affirme pas avoir généré une image si aucun outil de génération n'est disponible."
+    ].join("\n");
+    const requestMessages = [
+      { role: "system" as const, content: systemInstruction },
+      ...conversation.map(({ role, content: text }) => ({ role, content: text }))
+    ];
     setMessages(conversation); setDraft(""); setSending(true); setError("");
     try {
       let answer: string;
@@ -118,7 +143,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
         if (browserEnabled && !window.confirm("Autoriser cette requête à piloter un navigateur dédié ? Les formulaires ne seront pas soumis automatiquement.")) throw new Error("Opération annulée : autorisation du navigateur non accordée.");
         answer = await invoke<string>("ollama_agent_chat", {
           model,
-          messages: conversation.map(({ role, content: text }) => ({ role, content: text })),
+          messages: requestMessages,
           workspaceRoot: workspace, allowWrite, browserEnabled
         });
       } else {
@@ -164,7 +189,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
             {messages.map(message => <article className={`ai-message ${message.role === "user" ? "ai-message-user" : "ai-message-assistant"}`} key={message.id}>
               <div className="ai-message-avatar">{message.role === "user" ? <UserRound size={16}/> : <Bot size={17}/>}</div>
               <div className="ai-message-content"><div className="ai-message-author">{message.role === "user" ? "Toi" : model || "Assistant IA"}</div>{message.role === "assistant" ? <AdaptiveMessage content={message.content} /> : <p>{message.content}</p>}
-                {message.role === "assistant" && <button className="ai-speak-message" type="button" onClick={() => speak(message.content)} title="Lire cette réponse à voix haute"><Volume2 size={14}/> Écouter</button>}
+                {message.role === "assistant" && <div className="ai-message-actions"><button className="ai-speak-message" type="button" onClick={() => void copyMessage(message)} title="Copier cette réponse">{copiedMessageId === message.id ? <Check size={14}/> : <Copy size={14}/>} {copiedMessageId === message.id ? "Copié" : "Copier"}</button><button className="ai-speak-message" type="button" onClick={() => speak(message.content)} title="Lire cette réponse à voix haute"><Volume2 size={14}/> Écouter</button></div>}
               </div>
             </article>)}
             {sending && <div className="ai-message ai-message-assistant"><div className="ai-message-avatar"><Bot size={17}/></div><div className="ai-message-content"><div className="ai-message-author">{agentMode ? "Agent local" : model}</div><p className="ai-thinking"><span/><span/><span/> {agentMode ? "L'agent travaille…" : "Le modèle réfléchit…"}</p></div></div>}
