@@ -3,9 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { Bot, Folder, Globe, LockKeyhole, RefreshCw, ShieldCheck, ShieldAlert, Volume2 } from "lucide-react";
 
 type Model = { name: string; size?: number };
-type AgentSettings = { model: string; workspace: string; allowWrite: boolean; browserEnabled: boolean; voiceReplies: boolean };
+type AgentSettings = { model: string; workspace: string; allowWrite: boolean; browserEnabled: boolean; terminalEnabled: boolean; voiceReplies: boolean };
 const SETTINGS_KEY = "nexus.ai.settings";
-const defaults: AgentSettings = { model: "", workspace: "", allowWrite: false, browserEnabled: false, voiceReplies: false };
+const defaults: AgentSettings = { model: "", workspace: "", allowWrite: false, browserEnabled: false, terminalEnabled: false, voiceReplies: false };
 
 function readSettings(): AgentSettings {
   try { return { ...defaults, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<AgentSettings>) }; }
@@ -67,10 +67,14 @@ export function LocalAISettings({ runtime }: { runtime: boolean }) {
         <label className="ai-settings-toggle"><input type="checkbox" checked={settings.browserEnabled} onChange={event => update({ browserEnabled: event.target.checked })}/> Autoriser le navigateur</label>
       </div>
       <div className="ai-settings-row">
+        <div className={"ai-settings-row-icon " + (settings.terminalEnabled ? "ai-settings-warning" : "")}><LockKeyhole size={18}/></div><div className="ai-settings-row-copy"><strong>Terminal contrôlé</strong><span>{settings.terminalEnabled ? "Actions prédéfinies disponibles dans le dossier de travail : Git, npm, Cargo et informations système. Aucune commande shell libre." : "Désactivé par défaut. L’agent ne peut pas lancer de commandes locales."}</span></div>
+        <label className="ai-settings-toggle"><input type="checkbox" checked={settings.terminalEnabled} onChange={event => update({ terminalEnabled: event.target.checked })}/> Autoriser le terminal</label>
+      </div>
+      <div className="ai-settings-row">
         <div className="ai-settings-row-icon"><Volume2 size={18}/></div><div className="ai-settings-row-copy"><strong>Lecture vocale</strong><span>La lecture vocale peut aussi être activée directement dans l’en-tête du chat.</span></div>
         <label className="ai-settings-toggle"><input type="checkbox" checked={settings.voiceReplies} onChange={event => update({ voiceReplies: event.target.checked })}/> Préférence activée</label>
       </div>
-      <div className="ai-settings-security"><LockKeyhole size={17}/><div><strong>Contrôles de sécurité</strong><p>L’écriture et le navigateur demandent une confirmation au moment de l’utilisation. L’agent n’obtient pas de terminal administrateur par ces réglages. Ne choisis que des dossiers que tu es autorisé à utiliser.</p></div></div>
+      <div className="ai-settings-security"><LockKeyhole size={17}/><div><strong>Contrôles de sécurité</strong><p>L’écriture, le navigateur et le terminal demandent une confirmation avant chaque tâche agent. Le terminal n’exécute qu’une liste d’actions prédéfinies, sans shell ni privilèges administrateur. Ne choisis que des dossiers que tu es autorisé à utiliser.</p></div></div>
     </div>
   </section>;
 }
