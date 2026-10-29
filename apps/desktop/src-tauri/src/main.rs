@@ -1839,6 +1839,126 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
     Err("L'agent a atteint la limite de 8 appels d'outils. Demande-lui de continuer en précisant la tâche restante.".to_string())
 }
 
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SemanticMemory {
+    id: String,
+    content: String,
+    embedding: Vec<f32>,
+    created_at: u128,
+}
+
+fn semantic_memory_path() -> Result<PathBuf, String> {
+    let base = if cfg!(target_os = "windows") {
+        std::env::var_os("APPDATA").map(PathBuf::from)
+            .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+    } else {
+        std::env::var_os("XDG_DATA_HOME").map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
+    }.ok_or("Impossible de déterminer le dossier de données utilisateur.")?;
+    let dir = base.join("NEXUS-CONTROL");
+    fs::create_dir_all(&dir).map_err(|e| format!("Création du dossier mémoire impossible : {e}"))?;
+    Ok(dir.join("semantic-memory.json"))
+}
+
+fn load_semantic_memories() -> Result<Vec<SemanticMemory>, String> {
+    let path = semantic_memory_path()?;
+    if !path.exists() { return Ok(Vec::new()); }
+    let raw = fs::read_to_string(path).map_err(|e| format!("Lecture de la mémoire impossible : {e}"))?;
+    serde_json::from_str(&raw).map_err(|e| format!("Fichier de mémoire invalide : {e}"))
+}
+
+fn save_semantic_memories(items: &[SemanticMemory]) -> Result<(), String> {
+    let path = semantic_memory_path()?;
+    let json = serde_json::to_vec(items).map_err(|e| e.to_string())?;
+    let temp = path.with_extension("json.tmp");
+    fs::write(&temp, json).map_err(|e| format!("Écriture de la mémoire impossible : {e}"))?;
+    fs::rename(&temp, &path).map_err(|e| format!("Validation de la mémoire impossible : {e}"))
+}
+
+fn ollama_embedding(model: &str, input: &str) -> Result<Vec<f32>, String> {
+    let model = model.trim();
+    if model.is_empty() || model.len() > 200 || input.trim().is_empty() || input.chars().count() > 6000 {
+        return Err("Modèle ou texte d'embedding invalide (maximum 6 000 caractères).".to_string());
+    }
+    ensure_ollama_server()?;
+    let body = serde_json::json!({"model": model, "input": input}).to_string();
+    let mut child = Command::new("curl")
+        .args(["--fail", "--silent", "--show-error", "--max-time", "120",
+            "-H", "Content-Type: application/json", "--data-binary", "@-",
+            "http://127.0.0.1:11434/api/embed"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().map_err(|e| format!("Impossible de lancer curl : {e}"))?;
+    child.stdin.as_mut().ok_or("Flux Ollama indisponible.")?
+        .write_all(body.as_bytes()).map_err(|e| e.to_string())?;
+    drop(child.stdin.take());
+    let output = child.wait_with_output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(format!("Embedding Ollama impossible. Installe un modèle d'embeddings, par exemple « ollama pull nomic-embed-text ». Détail : {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
+    let vector = value.get("embeddings").and_then(|v| v.as_array())
+        .and_then(|a| a.first()).and_then(|v| v.as_array())
+        .ok_or("Ollama n'a pas retourné de vecteur. Vérifie le modèle d'embeddings.")?;
+    let result: Vec<f32> = vector.iter().filter_map(|v| v.as_f64().map(|n| n as f32)).collect();
+    if result.is_empty() || result.iter().any(|n| !n.is_finite()) {
+        return Err("Vecteur d'embedding invalide.".to_string());
+    }
+    Ok(result)
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() || a.is_empty() { return -1.0; }
+    let dot: f32 = a.iter().zip(b).map(|(x,y)| x*y).sum();
+    let na: f32 = a.iter().map(|x| x*x).sum::<f32>().sqrt();
+    let nb: f32 = b.iter().map(|x| x*x).sum::<f32>().sqrt();
+    if na == 0.0 || nb == 0.0 { -1.0 } else { dot / (na * nb) }
+}
+
+#[tauri::command]
+fn semantic_memory_add(model: String, content: String) -> Result<usize, String> {
+    let text = content.trim();
+    if text.len() < 12 || text.chars().count() > 6000 {
+        return Err("Un souvenir doit contenir entre 12 et 6 000 caractères.".to_string());
+    }
+    let embedding = ollama_embedding(&model, text)?;
+    let mut items = load_semantic_memories()?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?.as_millis();
+    let id = format!("{}-{}", now, items.len());
+    items.push(SemanticMemory { id, content: text.to_string(), embedding, created_at: now });
+    if items.len() > 500 { items.drain(0..items.len()-500); }
+    save_semantic_memories(&items)?;
+    Ok(items.len())
+}
+
+#[tauri::command]
+fn semantic_memory_search(model: String, query: String, limit: usize) -> Result<Vec<String>, String> {
+    let items = load_semantic_memories()?;
+    if items.is_empty() { return Ok(Vec::new()); }
+    let vector = ollama_embedding(&model, &query)?;
+    let mut ranked: Vec<(f32, String)> = items.into_iter()
+        .map(|item| (cosine_similarity(&vector, &item.embedding), item.content))
+        .filter(|(score, _)| *score > 0.15)
+        .collect();
+    ranked.sort_by(|a,b| b.0.total_cmp(&a.0));
+    Ok(ranked.into_iter().take(limit.clamp(1, 8)).map(|(_, text)| text).collect())
+}
+
+#[tauri::command]
+fn semantic_memory_list() -> Result<Vec<String>, String> {
+    Ok(load_semantic_memories()?.into_iter().map(|item| item.content).collect())
+}
+
+#[tauri::command]
+fn semantic_memory_clear() -> Result<(), String> {
+    let path = semantic_memory_path()?;
+    if path.exists() { fs::remove_file(path).map_err(|e| format!("Suppression de la mémoire impossible : {e}"))?; }
+    Ok(())
+}
+
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -1859,7 +1979,11 @@ fn main() {
             get_security_audit,
             list_ollama_models,
             ollama_chat,
-            ollama_agent_chat
+            ollama_agent_chat,
+            semantic_memory_add,
+            semantic_memory_search,
+            semantic_memory_list,
+            semantic_memory_clear
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");

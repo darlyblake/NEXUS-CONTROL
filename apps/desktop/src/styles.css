@@ -214,3 +214,8 @@
 .adaptive-chart-track{height:9px;border-radius:20px;background:#edf2f8;overflow:hidden}
 .adaptive-chart-track span{display:block;height:100%;min-width:0;border-radius:20px;background:linear-gradient(90deg,#4776d0,#7ca4f2);transition:width .25s ease}
 @media(max-width:560px){.adaptive-info-card,.adaptive-chart{padding:11px}.adaptive-info-card dl{grid-template-columns:minmax(0,1fr)}.ai-message-actions{gap:10px}}
+
+
+.ai-memory-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary, #64748b); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.ai-memory-toggle input { accent-color: #2563eb; }
+.ai-composer-tools { flex-wrap: wrap; }
