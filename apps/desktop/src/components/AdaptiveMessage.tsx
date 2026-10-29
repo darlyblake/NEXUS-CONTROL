@@ -86,7 +86,41 @@ export function AdaptiveMessage({ content }: Props) {
       const code: string[] = [];
       while (i < lines.length && !/^\s*\x60{3,}\s*$/.test(lines[i])) code.push(lines[i++]);
       if (i < lines.length) i++;
-      blocks.push(<CodeBlock key={key++} code={code.join("\n")} language={language} />);
+      const source = code.join("\n");
+      if (language === "nexus-card") {
+        try {
+          const card = JSON.parse(source) as { title?: string; description?: string; status?: string; fields?: Array<{ label: string; value: string }> };
+          blocks.push(
+            <section className="adaptive-info-card" key={key++}>
+              {card.status && <span className="adaptive-card-status">{card.status}</span>}
+              {card.title && <h3>{card.title}</h3>}
+              {card.description && <p>{card.description}</p>}
+              {Array.isArray(card.fields) && card.fields.length > 0 && <dl>{card.fields.map((field, j) => <div key={j}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl>}
+            </section>
+          );
+        } catch {
+          blocks.push(<CodeBlock key={key++} code={source} language={language} />);
+        }
+      } else if (language === "nexus-chart") {
+        try {
+          const chart = JSON.parse(source) as { title?: string; unit?: string; labels?: string[]; values?: number[] };
+          const entries = (chart.labels || []).map((label, j) => ({ label, value: Number(chart.values?.[j] ?? 0) })).filter(item => Number.isFinite(item.value));
+          const max = Math.max(1, ...entries.map(item => item.value));
+          blocks.push(
+            <section className="adaptive-chart" key={key++}>
+              {chart.title && <h3>{chart.title}</h3>}
+              {entries.map((entry, j) => <div className="adaptive-chart-row" key={j}>
+                <div className="adaptive-chart-label"><span>{entry.label}</span><strong>{entry.value.toLocaleString("fr-FR")}{chart.unit ? " " + chart.unit : ""}</strong></div>
+                <div className="adaptive-chart-track"><span style={{ width: Math.max(0, Math.min(100, entry.value / max * 100)) + "%" }} /></div>
+              </div>)}
+            </section>
+          );
+        } catch {
+          blocks.push(<CodeBlock key={key++} code={source} language={language} />);
+        }
+      } else {
+        blocks.push(<CodeBlock key={key++} code={source} language={language} />);
+      }
       continue;
     }
 
