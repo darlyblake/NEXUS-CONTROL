@@ -116,6 +116,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
     const systemInstruction = [
       "Tu es l'assistant intégré à NEXUS CONTROL. Réponds dans la langue de l'utilisateur, de façon claire et utile.",
       "Formate les réponses avec Markdown : titres courts, listes, tableaux Markdown quand ils améliorent la compréhension, et blocs de code avec le langage indiqué.",
+      "Si l’utilisateur demande un tableau, crée-le toujours en Markdown valide : une ligne d’en-têtes, une ligne de séparation avec autant de colonnes que d’en-têtes, puis les lignes de données. Écris les barres verticales | sans antislash devant. Ne refuse pas une demande de tableau.",
       "Quand une fiche structurée est réellement utile, produis un bloc fenced ```nexus-card contenant un objet JSON avec title (texte), description (texte facultatif), status (texte facultatif), fields (tableau facultatif d'objets label/value). Exemple :",
       "```nexus-card\n{\n  \"title\": \"Ordinateur\",\n  \"status\": \"Connecté\",\n  \"fields\": [{\"label\": \"Système\", \"value\": \"Ubuntu\"}]\n}\n```",
       "Quand un graphique simple apporte de la valeur, produis un bloc fenced ```nexus-chart avec un objet JSON contenant title, labels (tableau de textes), values (tableau de nombres de même longueur) et unit (facultatif). Exemple :",
