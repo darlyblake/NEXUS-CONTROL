@@ -1,5 +1,6 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { Check, Copy, ExternalLink } from "lucide-react";
+import { HTMLRunner } from "./HTMLRunner";
 
 type Props = { content: string };
 
@@ -121,6 +122,8 @@ export function AdaptiveMessage({ content }: Props) {
         } catch {
           blocks.push(<CodeBlock key={key++} code={source} language={language} />);
         }
+      } else if (["html", "htm", "html5", "xhtml"].includes(language.toLowerCase())) {
+        blocks.push(<HTMLRunner key={key++} initialCode={source} />);
       } else {
         blocks.push(<CodeBlock key={key++} code={source} language={language} />);
       }
