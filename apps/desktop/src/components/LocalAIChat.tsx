@@ -144,7 +144,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
         if (!workspace && (!browserEnabled || allowWrite)) throw new Error("Configure un dossier de travail dans Paramètres → Assistant IA. Pour utiliser uniquement le navigateur, active-le dans ces paramètres et laisse l’écriture désactivée.");
         if (allowWrite && !window.confirm("Autoriser l'IA à créer ou remplacer des fichiers texte dans le dossier configuré ?")) throw new Error("Opération annulée : autorisation d’écriture non accordée.");
         if (browserEnabled && !window.confirm("Autoriser cette requête à piloter un navigateur dédié ? Les formulaires ne seront pas soumis automatiquement.")) throw new Error("Opération annulée : autorisation du navigateur non accordée.");
-        if (terminalEnabled && !window.confirm("Autoriser l’agent à lancer les actions terminal prédéfinies (Git, npm, Cargo, informations système) dans le dossier de travail configuré ? Aucune commande libre ni shell ne sera autorisé.")) throw new Error("Opération annulée : autorisation du terminal non accordée.");
+        if (terminalEnabled && !window.confirm("Autoriser l’agent à lancer les actions terminal prédéfinies (Git, npm, Cargo, informations système) dans le dossier de travail configuré ? Aucune commande shell libre ne sera autorisée.")) throw new Error("Opération annulée : autorisation du terminal non accordée.");
         answer = await invoke<string>("ollama_agent_chat", {
           model,
           messages: requestMessages,
