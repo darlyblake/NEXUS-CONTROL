@@ -18,8 +18,14 @@ const PREVIEW_CSP = [
 
 function makeDocument(source: string): string {
   const csp = '<meta http-equiv="Content-Security-Policy" content="' + PREVIEW_CSP + '">';
-  if (/<html[\s>]/i.test(source)) {
-    return source.replace(/<head([^>]*)>/i, (_match, attrs) => '<head' + attrs + '>' + csp);
+  if (/<html[\\s>]/i.test(source)) {
+    if (/<head(?:\\s[^>]*)?>/i.test(source)) {
+      return source.replace(/<head([^>]*)>/i, (_match, attrs) => '<head' + attrs + '>' + csp);
+    }
+    if (/<body(?:\\s[^>]*)?>/i.test(source)) {
+      return source.replace(/<body(?:\\s[^>]*)?>/i, match => '<head>' + csp + '</head>' + match);
+    }
+    return source.replace(/<html([^>]*)>/i, match => match + '<head>' + csp + '</head>');
   }
   return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' + csp + '</head><body>' + source + '</body></html>';
 }
