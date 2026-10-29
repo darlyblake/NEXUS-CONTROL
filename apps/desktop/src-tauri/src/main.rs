@@ -1183,6 +1183,8 @@ struct OllamaModel {
 struct OllamaChatMessage {
     role: String,
     content: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    images: Vec<String>,
 }
 
 fn ollama_api_ready() -> bool {
@@ -1289,6 +1291,9 @@ fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String
         }
         if message.content.trim().is_empty() || message.content.chars().count() > 12_000 {
             return Err("Chaque message doit contenir du texte et ne pas dépasser 12 000 caractères.".to_string());
+        }
+        if message.images.len() > 4 || message.images.iter().any(|image| image.len() > 11_200_000) {
+            return Err("Images refusées : maximum 4 images de 8 Mo chacune.".to_string());
         }
         total_chars += message.content.chars().count();
     }
