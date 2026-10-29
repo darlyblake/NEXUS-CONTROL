@@ -1572,7 +1572,7 @@ fn search_public_web(query: &str) -> Result<String, String> {
 }
 
 fn run_agent_terminal(action: &str, root: &Path) -> Result<String, String> {
-    // Commandes prédéfinies uniquement : aucun shell, aucune commande arbitraire,
+    // Commandes prédéfinies uniquement : aucun shell libre ni commande arbitraire,
     // aucun argument fourni librement par le modèle.
     let (program, args): (&str, &[&str]) = match action {
         "pwd" => if cfg!(target_os = "windows") { ("cmd", &["/C", "cd"]) } else { ("pwd", &[]) },
@@ -1763,7 +1763,7 @@ fn ollama_agent_chat(model: String, messages: Vec<OllamaChatMessage>, workspace_
     if terminal_enabled {
         functions.push(serde_json::json!({"type":"function","function":{
             "name":"run_terminal",
-            "description":"Exécuter une action prédéfinie dans le dossier de travail autorisé. Aucun shell ni commande arbitraire. Actions : pwd, git_status, git_diff_stat, git_log, npm_build, npm_test, cargo_check, cargo_test, node_version, python_version, system_info. Choisir uniquement l'action utile à la demande.",
+            "description":"Exécuter une action prédéfinie dans le dossier de travail autorisé. Aucun shell libre ni commande arbitraire. Actions : pwd, git_status, git_diff_stat, git_log, npm_build, npm_test, cargo_check, cargo_test, node_version, python_version, system_info. Choisir uniquement l'action utile à la demande.",
             "parameters":{"type":"object","properties":{"action":{"type":"string","enum":["pwd","git_status","git_diff_stat","git_log","npm_build","npm_test","cargo_check","cargo_test","node_version","python_version","system_info"]}},"required":["action"]}
         }}));
     }
