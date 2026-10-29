@@ -153,7 +153,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
       { role: "system" as const, content: systemInstruction },
       ...conversation.map(({ role, content: text, images: imageData }) => ({ role, content: text, ...(imageData?.length ? { images: imageData } : {}) }))
     ];
-    setMessages(conversation); setDraft(""); setSending(true); setError("");
+    setMessages(conversation); setDraft(""); setAttachments([]); setSending(true); setError("");
     try {
       let answer: string;
       const knownFolder = detectKnownFolderCommand(content);
