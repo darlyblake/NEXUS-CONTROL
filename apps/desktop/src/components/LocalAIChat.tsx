@@ -30,6 +30,17 @@ function detectKnownFolderCommand(input: string): string | null {
   return folders.find(([pattern]) => pattern.test(text))?.[1] ?? null;
 }
 
+const CHAT_HISTORY_KEY = "nexus.ai.chat.history";
+function readChatHistory(): ChatMessage[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is ChatMessage =>
+      item && (item.role === "user" || item.role === "assistant") &&
+      typeof item.content === "string" && typeof item.id === "number"
+    ).slice(-24).map(item => ({ role: item.role, content: item.content.slice(0, 12000), id: item.id }));
+  } catch { return []; }
+}
 const SETTINGS_KEY = "nexus.ai.settings";
 function readAgentSettings(): AgentSettings {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as AgentSettings; } catch { return {}; }
@@ -38,7 +49,7 @@ function readAgentSettings(): AgentSettings {
 export function LocalAIChat({ runtime }: { runtime: boolean }) {
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [model, setModel] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => readChatHistory());
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -76,6 +87,12 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
   }, [runtime]);
 
   useEffect(() => { void refreshModels(); }, [refreshModels]);
+  useEffect(() => {
+    try {
+      const safeHistory = messages.slice(-24).map(({ role, content, id }) => ({ role, content: content.slice(0, 12000), id }));
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(safeHistory));
+    } catch { setError("Historique local non sauvegardé : espace de stockage indisponible."); }
+  }, [messages]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, sending]);
   useEffect(() => () => { window.speechSynthesis?.cancel(); recognitionRef.current?.stop(); }, []);
 
