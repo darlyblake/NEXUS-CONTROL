@@ -36,7 +36,7 @@ Le modèle ne reçoit pas un shell libre. Il peut uniquement demander une action
 - `python_version`
 - `system_info`
 
-Les commandes sont lancées sans interpréteur de shell, dans le dossier de travail autorisé. La sortie est limitée à 20 000 caractères. Aucun accès administrateur, installation de paquets, suppression ou commande arbitraire n'est exposé par cet outil.
+Aucune commande shell libre n'est interprétée. Les actions prédéfinies sont exécutées dans le dossier de travail autorisé (avec un wrapper système fixe pour les commandes Windows). La sortie est limitée à 20 000 caractères. Aucun accès administrateur, installation de paquets, suppression ou commande arbitraire n'est exposé par cet outil.
 
 ## Limites connues
 
