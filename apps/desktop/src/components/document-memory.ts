@@ -1,5 +1,8 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import mammoth from "mammoth/mammoth.browser";
+import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+import * as mammoth from "mammoth/mammoth.browser";
+
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export async function extractOfficeDocument(file: File): Promise<string> {
   const extension = file.name.toLowerCase().split(".").pop();
