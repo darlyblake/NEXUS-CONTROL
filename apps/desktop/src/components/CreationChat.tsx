@@ -121,6 +121,20 @@ export function CreationChat({ runtime }: { runtime: boolean }) {
     }
   }
 
+  async function downloadImage(image: string) {
+    try {
+      const response = await fetch(image);
+      if (!response.ok) throw new Error("Téléchargement refusé");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = "nexus-image." + ((blob.type.split("/")[1] || "png").split(";")[0]); anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch {
+      setError("Impossible de télécharger l’image depuis cette adresse. Vérifie les droits d’accès du fournisseur.");
+    }
+  }
+
   function downloadFile(file: NonNullable<ChatItem["file"]>) {
     if (file.format === "pdf") { savePdf(file.name, file.content); return; }
     downloadText(file.name + ".md", file.content, "text/markdown;charset=utf-8");
@@ -157,7 +171,7 @@ export function CreationChat({ runtime }: { runtime: boolean }) {
             <div className="creation-message-avatar">{item.role === "user" ? <UserRound size={16}/> : <Bot size={17}/>}</div>
             <div className="creation-message-body"><div className="creation-message-author">{item.role === "user" ? "Toi" : "Assistant IA"}</div>
               <div className="creation-message-text">{item.text}</div>
-              {item.image && <div className="creation-image-result"><img src={item.image} alt="Image générée"/><button type="button" onClick={() => downloadText("nexus-image.png", item.image!, "image/png")}><Download size={15}/> Télécharger l’image</button></div>}
+              {item.image && <div className="creation-image-result"><img src={item.image} alt="Image générée"/><button type="button" onClick={() => void downloadImage(item.image!)}><Download size={15}/> Télécharger l’image</button></div>}
               {item.file && <div className="creation-file-card"><div className="creation-file-icon"><FileText size={22}/></div><div className="creation-file-meta"><strong>{item.file.name}.{item.file.format === "pdf" ? "pdf" : "md"}</strong><span>{item.file.format === "pdf" ? "Document prêt à imprimer / enregistrer en PDF" : "Fichier Markdown prêt à enregistrer"}</span></div><button type="button" onClick={() => downloadFile(item.file!)}><Download size={15}/>{item.file.format === "pdf" ? "Créer le PDF" : "Télécharger .md"}</button></div>}
             </div>
           </article>)}
