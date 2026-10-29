@@ -49,3 +49,4 @@ npm run tauri:build
 ```
 
 Pour la vision, installe un modèle multimodal avec Ollama puis sélectionne-le dans NEXUS CONTROL. Un modèle texte seul ne peut pas analyser les pixels.
+
