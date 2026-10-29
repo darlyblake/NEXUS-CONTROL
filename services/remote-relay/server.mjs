@@ -222,6 +222,8 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 wss.on("connection", (ws) => {
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
   let identity = null;
   const authTimer = setTimeout(() => {
     if (!identity) ws.close(4401, "authentication_required");
@@ -319,6 +321,20 @@ wss.on("connection", (ws) => {
     }
   });
 });
+
+// Detect dead peers even when a mobile/desktop network silently drops packets.
+// The ws library automatically answers protocol-level ping frames with pong.
+const heartbeatTimer = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      continue;
+    }
+    ws.isAlive = false;
+    if (ws.readyState === WebSocket.OPEN) ws.ping();
+  }
+}, 25_000);
+heartbeatTimer.unref();
 
 server.listen(PORT, HOST, () => {
   console.log(`NEXUS remote relay listening on ${HOST}:${PORT}`);
