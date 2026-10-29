@@ -67,7 +67,7 @@ export function LocalAISettings({ runtime }: { runtime: boolean }) {
         <label className="ai-settings-toggle"><input type="checkbox" checked={settings.browserEnabled} onChange={event => update({ browserEnabled: event.target.checked })}/> Autoriser le navigateur</label>
       </div>
       <div className="ai-settings-row">
-        <div className={"ai-settings-row-icon " + (settings.terminalEnabled ? "ai-settings-warning" : "")}><LockKeyhole size={18}/></div><div className="ai-settings-row-copy"><strong>Terminal contrôlé</strong><span>{settings.terminalEnabled ? "Actions prédéfinies disponibles dans le dossier de travail : Git, npm, Cargo et informations système. Aucune commande libre ni shell." : "Désactivé par défaut. L’agent ne peut pas lancer de commandes locales."}</span></div>
+        <div className={"ai-settings-row-icon " + (settings.terminalEnabled ? "ai-settings-warning" : "")}><LockKeyhole size={18}/></div><div className="ai-settings-row-copy"><strong>Terminal contrôlé</strong><span>{settings.terminalEnabled ? "Actions prédéfinies disponibles dans le dossier de travail : Git, npm, Cargo et informations système. Aucune commande shell libre." : "Désactivé par défaut. L’agent ne peut pas lancer de commandes locales."}</span></div>
         <label className="ai-settings-toggle"><input type="checkbox" checked={settings.terminalEnabled} onChange={event => update({ terminalEnabled: event.target.checked })}/> Autoriser le terminal</label>
       </div>
       <div className="ai-settings-row">
