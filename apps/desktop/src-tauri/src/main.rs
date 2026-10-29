@@ -1311,7 +1311,7 @@ fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String
 
     let mut child = Command::new("curl")
         .args([
-            "--fail", "--silent", "--show-error", "--max-time", "180",
+            "--fail", "--silent", "--show-error", "--max-time", "600",
             "-H", "Content-Type: application/json", "--data-binary", "@-",
             "http://127.0.0.1:11434/api/chat"
         ])
