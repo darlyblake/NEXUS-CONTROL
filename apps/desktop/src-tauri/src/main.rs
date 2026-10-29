@@ -1592,12 +1592,12 @@ fn run_agent_terminal(action: &str, root: &Path) -> Result<String, String> {
         .map_err(|error| format!("Impossible de lancer {program} : {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, if stderr.is_empty() { String::new() } else { format!("\\n[stderr]\\n{stderr}") });
+    let combined = format!("{}{}", stdout, if stderr.is_empty() { String::new() } else { format!("\n[stderr]\n{stderr}") });
     let excerpt: String = combined.chars().take(20_000).collect();
     if output.status.success() {
-        Ok(format!("Commande terminée (code 0) dans {}\\n{}", root.display(), excerpt.trim()))
+        Ok(format!("Commande terminée (code 0) dans {}\n{}", root.display(), excerpt.trim()))
     } else {
-        Err(format!("Commande terminée avec le code {:?} dans {}\\n{}", output.status.code(), root.display(), excerpt.trim()))
+        Err(format!("Commande terminée avec le code {:?} dans {}\n{}", output.status.code(), root.display(), excerpt.trim()))
     }
 }
 
