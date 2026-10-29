@@ -1,0 +1,37 @@
+.creator-page{display:flex;flex-direction:column;gap:18px}
+.creator-intro{display:flex;align-items:center;gap:14px;padding:20px;border:1px solid #dce5f1;border-radius:13px;background:linear-gradient(120deg,#f7faff,#fff)}
+.creator-intro-icon{width:48px;height:48px;flex-shrink:0;display:grid;place-items:center;border-radius:12px;background:#e8efff;color:#3265d8}
+.creator-eyebrow{font-size:9px;letter-spacing:1.4px;font-weight:800;color:#4773c6}
+.creator-intro h2{margin:4px 0 5px;font-size:21px;color:#1e304b}
+.creator-intro p{margin:0;color:#697991;font-size:11px;line-height:1.6}
+.creator-tabs{display:flex;gap:8px;border-bottom:1px solid #e1e8f1;padding-bottom:10px}
+.creator-tabs button{display:inline-flex;align-items:center;gap:8px;border:1px solid #dce5f1;border-radius:8px;background:#fff;color:#61718a;padding:9px 13px;font-size:11px;font-weight:700}
+.creator-tabs button.selected{border-color:#bed0f6;background:#edf3ff;color:#2e5fc5}
+.creator-layout{display:grid;grid-template-columns:minmax(270px,.88fr) minmax(320px,1.12fr);align-items:start;gap:15px}
+.creator-panel{display:flex;min-width:0;flex-direction:column;gap:13px;padding:17px;border:1px solid #e0e7f0;border-radius:12px;background:#fff}
+.creator-panel-heading{display:flex;align-items:flex-start;gap:10px;padding-bottom:12px;border-bottom:1px solid #edf1f6;color:#3d69bf}
+.creator-panel-heading>svg{margin-top:2px;flex-shrink:0}
+.creator-panel-heading h3{font-size:13px;margin:0 0 4px;color:#253752}
+.creator-panel-heading p{font-size:10px;line-height:1.5;color:#7b899d;margin:0}
+.creator-panel label{display:flex;min-width:0;flex-direction:column;gap:6px;font-size:10px;font-weight:700;color:#53647b}
+.creator-panel input,.creator-panel select,.creator-panel textarea{width:100%;min-width:0;border:1px solid #dbe3ee;border-radius:7px;padding:9px 10px;background:#fff;color:#253650;font:inherit;font-size:11px;font-weight:400;outline:none}
+.creator-panel input:focus,.creator-panel select:focus,.creator-panel textarea:focus{border-color:#8cacee;box-shadow:0 0 0 3px #eaf0ff}
+.creator-panel textarea{resize:vertical;line-height:1.6}
+.creator-primary,.creator-secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #3166dc;border-radius:7px;background:#356be5;color:#fff;padding:10px 13px;font-size:11px;font-weight:700;cursor:pointer}
+.creator-primary:disabled{opacity:.5;cursor:not-allowed}
+.creator-secondary{background:#fff;border-color:#dce5f1;color:#4e607b}
+.creator-status,.creator-error{font-size:10px;line-height:1.6;margin:0;padding:9px 10px;border-radius:7px;background:#edf8f1;color:#27764c;overflow-wrap:anywhere}
+.creator-error{background:#fff0f0;color:#a33131}
+.creator-document-editor{min-height:380px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important;font-size:11px!important}
+.creator-export-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.creator-export-row>label{flex:1;min-width:160px}
+.creator-small-note{margin:0;color:#8793a5;font-size:9px;line-height:1.6}
+.creator-image-output{min-height:480px}
+.creator-image-empty{flex:1;min-height:350px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:1px dashed #dce5f1;border-radius:10px;background:#f9fbff;color:#8b9ab0;text-align:center;padding:20px}
+.creator-image-empty strong{font-size:12px;color:#53647b}
+.creator-image-empty span{max-width:230px;font-size:10px;line-height:1.6}
+.creator-generated-image{display:block;max-width:100%;max-height:540px;object-fit:contain;align-self:center;border-radius:8px;border:1px solid #e4eaf2}
+.creator-spin{animation:creator-rotate 1s linear infinite}
+@keyframes creator-rotate{to{transform:rotate(360deg)}}
+@media(max-width:900px){.creator-layout{grid-template-columns:minmax(0,1fr)}.creator-document-editor{min-height:300px}}
+@media(max-width:560px){.creator-intro{align-items:flex-start;padding:14px}.creator-intro h2{font-size:18px}.creator-panel{padding:13px}.creator-export-row{align-items:stretch;flex-direction:column}.creator-export-row>*{width:100%}}
