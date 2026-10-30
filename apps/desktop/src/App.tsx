@@ -321,7 +321,12 @@ function App() {
 
   const prepareNetworkAgent = useCallback(async (device: NetworkDevice) => {
     if (device.deviceType === "phone" || /android/i.test(device.osGuess)) {
-      setNotice("Préparation de l'agent Android : connecte ce téléphone en USB, active le débogage USB et accepte la demande RSA sur le téléphone. L'installation ne sera lancée qu'après cette autorisation.");
+      const authorizedUsbDevice = android.find(item => item.state === "device");
+      if (!authorizedUsbDevice) {
+        setNotice("Téléphone Android détecté sur le réseau, mais aucune connexion ADB USB autorisée n'est disponible. Branche le téléphone en USB, active le débogage USB et accepte la demande RSA. La compilation ne démarrera qu'après cette autorisation.");
+        return;
+      }
+      setNotice("Appareil Android autorisé détecté (" + authorizedUsbDevice.model + "). Compilation puis installation de l'agent…");
       await buildAndInstallAndroid();
       return;
     }
@@ -336,7 +341,7 @@ function App() {
       return;
     }
     setNotice("Le système de cet appareil n'est pas identifié avec assez de certitude pour choisir un agent. Consulte les indices et confirme son système avant l'installation.");
-  }, [buildAndInstallAndroid]);
+  }, [android, buildAndInstallAndroid]);
 
   const runSecurityAudit = useCallback(async () => {
     if (!isDesktopRuntime()) {
