@@ -472,7 +472,13 @@ fn scan_android_devices() -> Result<Vec<AndroidDevice>, String> {
 }
 
 #[tauri::command]
-fn build_and_install_android() -> Result<String, String> {
+async fn build_and_install_android() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(build_and_install_android_blocking)
+        .await
+        .map_err(|error| format!("La tâche de compilation Android s'est interrompue : {error}"))?
+}
+
+fn build_and_install_android_blocking() -> Result<String, String> {
     if !adb_available() {
         return Err("ADB n'est pas installé ou n'est pas accessible depuis NEXUS CONTROL. Installe Android platform-tools puis réessaie.".to_string());
     }
@@ -585,6 +591,13 @@ fn build_and_install_android() -> Result<String, String> {
 
     let mut build_command = Command::new(&gradle);
     build_command
+        .args([
+            "--no-daemon",
+            "--no-parallel",
+            "--max-workers=1",
+            "--console=plain",
+            "-Dorg.gradle.jvmargs=-Xmx1536m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8",
+        ])
         .arg("assembleDebug")
         .current_dir(&android_dir)
         .env("ANDROID_HOME", &sdk)
@@ -597,6 +610,7 @@ fn build_and_install_android() -> Result<String, String> {
     if let Ok(path) = std::env::join_paths(path_entries) {
         build_command.env("PATH", path);
     }
+    build_command.env("KOTLIN_DAEMON_JVM_OPTIONS", "-Xmx768m");
     let build = build_command
         .output()
         .map_err(|error| format!("Impossible de démarrer Gradle : {error}"))?;
@@ -1275,7 +1289,13 @@ fn list_ollama_models() -> Result<Vec<OllamaModel>, String> {
 }
 
 #[tauri::command]
-fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String, String> {
+async fn ollama_chat(model: String, messages: Vec<OllamaChatMessage>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || ollama_chat_blocking(model, messages))
+        .await
+        .map_err(|error| format!("La tâche de conversation IA s'est interrompue : {error}"))?
+}
+
+fn ollama_chat_blocking(model: String, messages: Vec<OllamaChatMessage>) -> Result<String, String> {
     let model = model.trim();
     if model.is_empty() || model.len() > 200 {
         return Err("Sélectionne un modèle Ollama installé.".to_string());

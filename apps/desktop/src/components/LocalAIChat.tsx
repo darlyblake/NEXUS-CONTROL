@@ -34,6 +34,12 @@ function detectKnownFolderCommand(input: string): string | null {
 const CHAT_HISTORY_KEY = "nexus.ai.chat.history";
 const SEMANTIC_MEMORY_KEY = "nexus.ai.semantic-memory.enabled";
 const EMBEDDING_MODEL = "nomic-embed-text";
+function safeStorageGet(key: string): string | null {
+  try { return window.localStorage.getItem(key); } catch { return null; }
+}
+function safeStorageSet(key: string, value: string): boolean {
+  try { window.localStorage.setItem(key, value); return true; } catch { return false; }
+}
 function readChatHistory(): ChatMessage[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
@@ -55,7 +61,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => readChatHistory());
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [memoryEnabled, setMemoryEnabled] = useState(() => localStorage.getItem(SEMANTIC_MEMORY_KEY) === "true");
+  const [memoryEnabled, setMemoryEnabled] = useState(() => safeStorageGet(SEMANTIC_MEMORY_KEY) === "true");
   const [memoryCount, setMemoryCount] = useState(0);
   const [loadingModels, setLoadingModels] = useState(false);
   const [sending, setSending] = useState(false);
@@ -92,7 +98,7 @@ export function LocalAIChat({ runtime }: { runtime: boolean }) {
   }, [runtime]);
 
   useEffect(() => { void refreshModels(); }, [refreshModels]);
-  useEffect(() => { localStorage.setItem(SEMANTIC_MEMORY_KEY, String(memoryEnabled)); }, [memoryEnabled]);
+  useEffect(() => { safeStorageSet(SEMANTIC_MEMORY_KEY, String(memoryEnabled)); }, [memoryEnabled]);
   useEffect(() => { if (runtime && memoryEnabled) void invoke<string[]>("semantic_memory_list").then(items => setMemoryCount(items.length)).catch(() => setMemoryCount(0)); }, [runtime, memoryEnabled]);
   useEffect(() => {
     try {
