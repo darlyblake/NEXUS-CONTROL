@@ -87,11 +87,11 @@ Pour compiler sur Ubuntu, consulte le [guide Android](apps/android/README.md). G
 
 ## Relais distant expérimental
 
-Le premier service de relais et les étapes de configuration sont décrits dans [services/remote-relay/README.md](services/remote-relay/README.md). Cette version sert à tester l’association et la présence des clients ; elle ne doit pas être considérée comme un système complet de contrôle distant.
+Le relais fournit des codes d'association à usage unique, des jetons, une authentification WSS et une révocation. Les associations et jetons sont toutefois conservés en mémoire : un redémarrage les invalide. Les clients Android et desktop possèdent une intégration expérimentale, mais cela ne constitue pas une session de contrôle complète. Le transfert de fichiers par Internet, le contrôle interactif et la persistance des associations restent à réaliser. Voir [services/remote-relay/README.md](services/remote-relay/README.md) et le suivi [Issue #29](https://github.com/darlyblake/NEXUS-CONTROL/issues/29).
 
 
 ## Agent Windows (fondation native)
 
 Le service Windows natif est en cours d'intégration dans [apps/windows](apps/windows/README.md). Il se compile depuis ce même dépôt et est conçu pour démarrer en arrière-plan après installation. Le workflow **Windows Agent** produit un artefact x64 pour les tests.
 
-Cette fondation n'est pas encore un agent de contrôle distant : elle n'ouvre aucun port réseau et n'exécute pas de commandes reçues. L'association, le consentement local, le relais commun, la découverte d'appareils et le contrôle distant doivent être implémentés et validés avant d'activer ces capacités. Une détection réseau ne doit jamais déclencher une installation sans authentification et approbation sur l'appareil cible.
+Le service Windows possède une connexion WSS sortante et des commandes de diagnostic en lecture seule (état et liste de processus). PowerShell distant reste désactivé par défaut. Le partage d'écran et le contrôle souris/clavier ne sont pas livrés : le service fonctionne en Session 0 et ne peut pas capturer ni piloter le bureau interactif. Un compagnon dans la session utilisateur, un canal IPC protégé et un consentement visible sont nécessaires. Une détection réseau ne doit jamais déclencher une installation sans authentification et approbation sur l'appareil cible.
