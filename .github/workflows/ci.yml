@@ -73,3 +73,18 @@ jobs:
       - name: Check Rust application
         working-directory: apps/desktop/src-tauri
         run: cargo check
+
+  relay-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/remote-relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install relay dependencies
+        run: npm install
+      - name: Test desktop-to-Windows pairing and command relay
+        run: npm test
