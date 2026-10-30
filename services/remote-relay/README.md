@@ -27,14 +27,14 @@ Le contrôle de santé est disponible sur `http://localhost:8787/health`. Pour u
 4. Une fois authentifié, les clients peuvent échanger des messages JSON typés ou des trames binaires. Le relais ne décode pas les commandes ni le contenu des fichiers.
 5. Une association peut être révoquée avec `POST /api/revoke` et l’en-tête `Authorization: Bearer <jeton>` ; cela invalide les deux jetons et ferme les deux connexions.
 
-Les jetons sont secrets : ne pas les mettre dans une URL, un journal, une capture d'écran ou un dépôt Git.
+Les jetons sont secrets : ne pas les mettre dans une URL, un journal, une capture d'écran ou un dépôt Git. Les jetons du protocole actuel expirent après **30 jours** (et non 12 heures). Le code d'association expire après cinq minutes.
 
 ## Limites importantes de cette première version
 
-- Les codes, jetons et associations sont conservés **en mémoire**. Un redémarrage du service invalide les sessions et les jetons ; ce stockage doit être remplacé par une base persistante avant une utilisation durable. Les jetons expirent après 12 heures et peuvent être révoqués avec `POST /api/revoke`.
+- Les codes, jetons et associations sont conservés **en mémoire**. Un redémarrage du service invalide les sessions et les jetons ; ce stockage doit être remplacé par une base persistante avant une utilisation durable. Les jetons expirent après **30 jours** et peuvent être révoqués avec `POST /api/revoke`.
 - Les routes de création d'association sont limitées par adresse IP, mais l'hébergement doit aussi appliquer une limitation de débit et des protections contre les abus.
 - Le relais ne chiffre pas le contenu au niveau applicatif de bout en bout : TLS protège le transport entre chaque client et le relais. Pour les fichiers sensibles, ajouter un chiffrement de bout en bout avec des clés échangées et vérifiées pendant l'association.
-- Aucun client n'est encore connecté à ce service. Tant que l'intégration Android et desktop n'est pas faite et que le relais n'est pas déployé, aucune session distante réelle ne peut être établie.
+- Les clients Android et desktop contiennent une intégration expérimentale au protocole d'association et de présence ; l'agent Windows dispose également d'un client WSS sortant. Cette intégration ne livre pas de contrôle distant complet. Le partage d'écran Windows, le contrôle clavier/souris, le transfert de fichiers Internet et les tests multi-machines restent à réaliser.
 - Le relais ne permet pas de contourner les permissions Android. La capture d'écran nécessite le consentement système ; le contrôle d'interface nécessite que l'utilisateur active volontairement le service d'accessibilité, et certaines actions resteront impossibles.
 
 ## Déploiement avec Render
