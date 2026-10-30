@@ -203,7 +203,7 @@ const server = createServer(async (req, res) => {
     }
     pairing.redeemed = true;
     const deviceToken = randomToken();
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const expiresAt = Date.now() + TOKEN_TTL_MS;
     const role = platform;
     targetRoles.set(pairing.pairId, role);
     for (const record of tokens.values()) {
