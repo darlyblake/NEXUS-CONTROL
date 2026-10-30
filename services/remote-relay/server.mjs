@@ -6,6 +6,11 @@ import { WebSocketServer, WebSocket } from "ws";
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const PAIR_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const TOKEN_TTL_MS = process.env.NODE_ENV === "test"
+  ? Math.max(100, Number(process.env.NEXUS_TEST_TOKEN_TTL_MS) || DEFAULT_TOKEN_TTL_MS)
+  : DEFAULT_TOKEN_TTL_MS;
+const CLEANUP_INTERVAL_MS = process.env.NODE_ENV === "test" ? 200 : 30_000;
 const MAX_JSON_BYTES = 64 * 1024;
 const MAX_FRAME_BYTES = 1024 * 1024;
 const MAX_PAIR_CREATES_PER_MINUTE = 5;
@@ -96,11 +101,18 @@ function cleanupExpired() {
     else rateLimits.delete(key);
   }
   const activePairIds = new Set([...tokens.values()].map((token) => token.pairId));
+  for (const [pairId, peers] of socketsByPair) {
+    if (activePairIds.has(pairId)) continue;
+    for (const peer of peers.values()) {
+      if (peer.readyState === WebSocket.OPEN) peer.close(4002, "pair_expired");
+    }
+    socketsByPair.delete(pairId);
+  }
   for (const pairId of targetRoles.keys()) {
     if (!activePairIds.has(pairId)) targetRoles.delete(pairId);
   }
 }
-const cleanupTimer = setInterval(cleanupExpired, 30_000);
+const cleanupTimer = setInterval(cleanupExpired, CLEANUP_INTERVAL_MS);
 cleanupTimer.unref();
 
 const server = createServer(async (req, res) => {
@@ -132,7 +144,7 @@ const server = createServer(async (req, res) => {
     const expiresAt = Date.now() + PAIR_TTL_MS;
     pairings.set(code, { pairId, desktopDeviceId, expiresAt, redeemed: false });
     targetRoles.set(pairId, "android");
-    tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", targetRole: "android", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+    tokens.set(hash(desktopToken), { pairId, deviceId: desktopDeviceId, role: "desktop", targetRole: "android", expiresAt: Date.now() + TOKEN_TTL_MS });
     return json(res, 201, {
       protocol: 1,
       pairId,
@@ -261,6 +273,9 @@ wss.on("connection", (ws) => {
       return;
     }
     if (ws.readyState !== WebSocket.OPEN) return;
+    if (!tokens.has(identity.tokenHash) || identity.expiresAt <= Date.now()) {
+      return ws.close(4002, "pair_expired");
+    }
     const peers = socketsByPair.get(identity.pairId);
     const otherRole = identity.role === "desktop"
       ? (targetRoles.get(identity.pairId) || identity.targetRole || "android")
