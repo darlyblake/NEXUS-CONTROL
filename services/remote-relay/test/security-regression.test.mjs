@@ -14,12 +14,12 @@ async function freePort() {
   return port;
 }
 
-async function startRelay(t) {
+async function startRelay(t, extraEnv = {}) {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["server.mjs"], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
+    env: { ...process.env, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), ...extraEnv },
     stdio: ["ignore", "ignore", "pipe"]
   });
   let stderr = "";
@@ -159,4 +159,25 @@ test("revocation invalidates both sides and closes active sessions", async t => 
   const replay = await connect(wsUrl, "desktop-security-test", pair.desktopToken);
   t.after(() => { if (replay.readyState < WebSocket.CLOSING) replay.terminate(); });
   await expectClose(replay, 4401);
+});
+
+
+test("relay closes both live sockets when pairing tokens expire", async t => {
+  const { base, wsUrl } = await startRelay(t, { NEXUS_TEST_TOKEN_TTL_MS: "700" });
+  const pair = await createPair(base);
+  const redeemed = await redeem(base, pair.pairCode, "windows-expiry-test", "windows");
+  assert.equal(redeemed.status, 200);
+  const target = await redeemed.json();
+
+  const desktop = await connect(wsUrl, "desktop-security-test", pair.desktopToken);
+  const windows = await connect(wsUrl, "windows-expiry-test", target.deviceToken);
+  t.after(() => {
+    if (desktop.readyState < WebSocket.CLOSING) desktop.terminate();
+    if (windows.readyState < WebSocket.CLOSING) windows.terminate();
+  });
+  await Promise.all([once(desktop, "message"), once(windows, "message")]);
+
+  const desktopClosed = expectClose(desktop, 4002);
+  const windowsClosed = expectClose(windows, 4002);
+  await Promise.all([desktopClosed, windowsClosed]);
 });
