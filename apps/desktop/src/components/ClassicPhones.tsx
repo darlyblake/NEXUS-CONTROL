@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, Cable, CheckCircle2, CircleHelp, Contact, Download, HardDrive, MessageSquare, RefreshCw, Smartphone, Usb, Wrench } from "lucide-react";
+import { Activity, Cable, CheckCircle2, CircleHelp, Contact, Download, HardDrive, MessageSquare, RefreshCw, Smartphone, Usb, Wrench, FolderOpen, Send, FileCheck2, PhoneCall, Save, ShieldCheck } from "lucide-react";
 import "./classic-phones.css";
 
 type Device = {
@@ -18,6 +18,19 @@ export function ClassicPhones({ runtime, onNotice }: { runtime: boolean; onNotic
   const [filter, setFilter] = useState("Toutes");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [mtpUri, setMtpUri] = useState("");
+  const [mtpListing, setMtpListing] = useState("");
+  const [localPath, setLocalPath] = useState("");
+  const [remotePath, setRemotePath] = useState("");
+  const [serialPort, setSerialPort] = useState("/dev/ttyUSB0");
+  const [gammuOutput, setGammuOutput] = useState("");
+  const [memory, setMemory] = useState("ME");
+  const [firmwareFile, setFirmwareFile] = useState("");
+  const [firmwareModel, setFirmwareModel] = useState("");
+  const [connectedModel, setConnectedModel] = useState("");
+  const [firmwareHash, setFirmwareHash] = useState("");
+  const [maintenanceOutput, setMaintenanceOutput] = useState("");
+  const [operationBusy, setOperationBusy] = useState(false);
 
   const scan = useCallback(async () => {
     if (!runtime) { setError("La détection USB nécessite l'application de bureau NEXUS CONTROL."); return; }
@@ -35,6 +48,38 @@ export function ClassicPhones({ runtime, onNotice }: { runtime: boolean; onNotic
   }, [runtime, onNotice]);
 
   useEffect(() => { void scan(); }, [scan]);
+
+  const runOperation = async (command: string, args: Record<string, string>, target: "mtp" | "gammu" | "maintenance") => {
+    setOperationBusy(true);
+    try {
+      const result = await invoke<unknown>(command, args);
+      const display = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      if (target === "mtp") setMtpListing(display);
+      else if (target === "gammu") setGammuOutput(display);
+      else setMaintenanceOutput(display);
+      onNotice("Opération terminée.");
+    } catch (cause) {
+      const message = String(cause);
+      if (target === "mtp") setMtpListing(message);
+      else if (target === "gammu") setGammuOutput(message);
+      else setMaintenanceOutput(message);
+      onNotice("Opération impossible : " + message);
+    } finally { setOperationBusy(false); }
+  };
+
+  const runFirmwareCheck = async () => {
+    setOperationBusy(true);
+    try {
+      const result = await invoke<{valid:boolean;status:string;sha256:string}>("classic_validate_firmware", {
+        file: firmwareFile, connectedModel, expectedModel: firmwareModel, expectedSha256: firmwareHash
+      });
+      setMaintenanceOutput(result.status + "\\nSHA-256 : " + result.sha256);
+      onNotice(result.valid ? "Empreinte et modèle vérifiés. Aucun flashage effectué." : "Firmware refusé.");
+    } catch (cause) {
+      setMaintenanceOutput(String(cause));
+      onNotice("Vérification firmware impossible.");
+    } finally { setOperationBusy(false); }
+  };
 
   const visible = devices.filter(device => filter === "Toutes" || device.brand.toLowerCase().includes(filter.toLowerCase()));
 
