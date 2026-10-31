@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ScreenSharePanel } from "./components/ScreenSharePanel";
 import { LocalAISettings } from "./components/LocalAIAgent";
 import { CreationChat } from "./components/CreationChat";
+import { ClassicPhones } from "./components/ClassicPhones";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
@@ -11,7 +12,7 @@ import {
   Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert, ImagePlus
 } from "lucide-react";
 
-type Page = "overview" | "assistant" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
+type Page = "overview" | "assistant" | "classic" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
@@ -22,6 +23,7 @@ const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
   { id: "assistant", label: "Assistant IA", icon: Bot },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
+  { id: "classic", label: "Téléphones classiques", icon: Smartphone },
   { id: "files", label: "Transfert de fichiers", icon: Folder },
   { id: "remote", label: "Accès distant", icon: Link2 },
   { id: "network", label: "Analyse réseau", icon: Radar },
@@ -39,6 +41,7 @@ const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
   assistant: { title: "Assistant IA", subtitle: "Chat local et agent IA avec accès contrôlé aux fichiers de cet ordinateur." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
+  classic: { title: "Téléphones classiques", subtitle: "Détection USB et diagnostic des téléphones à touches et appareils non Android." },
   files: { title: "Transfert de fichiers", subtitle: "Échanges de fichiers entre appareils compatibles ; ADB Android est le premier connecteur disponible." },
   remote: { title: "Accès distant", subtitle: "Connecte un PC, un appareil Android ou un appareil Apple selon les fonctions autorisées par son système." },
   network: { title: "Analyse réseau", subtitle: "Découvre les appareils qui répondent sur le même réseau local." },
@@ -510,6 +513,8 @@ function App() {
             </div>
             <div className="footer-note"><LockKeyhole size={14}/> Les commandes distantes restent indisponibles tant que leurs connecteurs ne sont pas configurés et testés.</div>
           </section>}
+
+          {page === "classic" && <section className="page-body"><ClassicPhones runtime={runtime} onNotice={setNotice}/></section>}
 
           {page === "devices" && <section className="page-body">
             {remotePeerRole === "windows" && <div className="panel device-panel"><div className="panel-header"><div><h3>Agent Windows connecté</h3><p>Un agent distant est authentifié via le relais NEXUS CONTROL.</p></div><span className="security-state secure-text">Connecté</span></div><div className="security-row"><div className="security-row-icon secure"><Monitor size={17}/></div><div className="security-row-copy"><strong>PC Windows associé</strong><span>Commandes disponibles dans Accès distant. La détection réseau locale n’est pas nécessaire pour cette connexion.</span></div><button className="button button-primary" onClick={() => navigate("remote")}>Ouvrir Accès distant</button></div></div>}
