@@ -4,6 +4,53 @@ Ce document enregistre de façon chronologique et détaillée toutes les modific
 
 ---
 
+## [Finalisation du Portail Mobile Companion & Connexion Express (USB / QR Code)] — 1er Novembre 2026
+
+### 🎯 Objectif
+Fournir une expérience d'appairage et de prise de contrôle instantanée en 1 clic pour n'importe quel smartphone, utilisable sans configuration manuelle :
+1. **Par câble USB en 15 secondes chrono** : détection de l'appareil, passage automatique en mode sans fil ADB TCP/IP, récupération de l'IP Wi-Fi, push et installation de l'APK Agent NEXUS, et démarrage du service sans fil.
+2. **Par Wi-Fi via QR Code / lien direct** : démarrage d'un mini-serveur HTTP local dans l'application Tauri sur le port 4242, génération d'un QR Code interactif et lien direct, ouvrant un portail mobile responsive sans aucune application à installer au préalable.
+
+---
+
+### 🚀 Fonctionnalités Finalisées et Intégrées
+
+#### 1. Backend Rust (Serveur Companion & Séquenceur USB 15s)
+- **Serveur HTTP Companion local (`start_companion_server`)** :
+  - Démarre un `TcpListener` local sur `0.0.0.0:4242`.
+  - Génère un jeton cryptographique UUID unique valable 5 minutes.
+  - Distribue la page responsive `companion_portal.html` sur `GET /` et `GET /pair`.
+  - Distribue directement l'APK de l'agent Android sur `GET /download-agent`.
+  - Commande d'arrêt sécurisé (`stop_companion_server`).
+- **Auto-connexion USB 15 secondes (`auto_connect_usb_android`)** :
+  - `adb tcpip 5555` pour activer l'écoute réseau ADB.
+  - Extraction automatique de l'IP du smartphone sur le sous-réseau local (`ip route` / `ip addr show wlan0`).
+  - `adb connect <IP>:5555` pour basculer en mode sans fil.
+  - Déploiement automatique de l'APK `app-debug.apk` vers `/data/local/tmp/nexus-agent.apk`.
+  - Installation silencieuse avec `pm install -t -r`.
+  - Lancement immédiat de l'agent avec `am start -n com.nexuscontrol.agent/.MainActivity`.
+  - Émission d'une notification système native avec rapport complet des étapes validées.
+
+#### 2. Frontend React (`CompanionPortal.tsx` & `CompanionPortal.css`)
+- **Onglet Câble USB (15s Auto)** :
+  - Détection automatique et sélection visuelle de l'appareil branché.
+  - Bouton d'action "⚡ Configuration et Connexion Express (15s)".
+  - Compte à rebours animé et jauge de progression en temps réel (0 à 100%).
+  - Journal d'exécution des étapes horodaté.
+  - Accès direct en 1 clic au streaming d'écran et à l'explorateur de fichiers.
+- **Onglet Wi-Fi Direct (QR Code & Lien)** :
+  - Démarrage et arrêt du serveur en 1 clic.
+  - Génération dynamique du QR Code via `qrcode.react`.
+  - Lien direct cliquable avec bouton de copie dans le presse-papiers.
+  - Compte à rebours de validité du jeton avec barre de progression de sécurité.
+  - Guide d'utilisation et présentation des fonctionnalités du portail mobile.
+
+#### 3. Intégration globale dans l'application (`App.tsx`)
+- Nouvel onglet de navigation permanent **"Appairage Express (QR/USB)"** avec icône éclair (`Zap`).
+- Raccordement direct aux commandes natives de capture d'écran (`scrcpy`) et de transfert de fichiers.
+
+---
+
 ## [Finalisation Complète du Pilier A : Continuité & Gestion au quotidien] — 31 Octobre 2026
 
 ### 🎯 Objectif

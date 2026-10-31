@@ -8,6 +8,7 @@ import { DoublePanelFileExplorer } from "./components/DoublePanelFileExplorer";
 import { ContinuityDashboard } from "./components/ContinuityDashboard";
 import { AutomationsEngine } from "./components/AutomationsEngine";
 import { RemoteAccessPanel } from "./components/RemoteAccessPanel";
+import { CompanionPortal } from "./components/CompanionPortal";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
@@ -16,7 +17,7 @@ import {
   Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert, ImagePlus, Radio
 } from "lucide-react";
 
-type Page = "overview" | "assistant" | "continuity" | "classic" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
+type Page = "overview" | "companion" | "assistant" | "continuity" | "classic" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
@@ -25,6 +26,7 @@ type UpdateInfo = { currentVersion: string; version: string; downloadUrl: string
 
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
+  { id: "companion", label: "Appairage Express (QR/USB)", icon: Zap },
   { id: "continuity", label: "Continuité & Santé", icon: Radio },
   { id: "assistant", label: "Assistant IA", icon: Bot },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
@@ -44,6 +46,7 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
+  companion: { title: "Appairage Express & Portail Mobile", subtitle: "Connectez un smartphone en 15s par câble USB ou sans fil par QR Code / lien direct." },
   continuity: { title: "Continuité & Surveillance", subtitle: "Presse-papiers partagé, notifications en direct et télémétrie de tes appareils." },
   assistant: { title: "Assistant IA", subtitle: "Chat local et agent IA avec accès contrôlé aux fichiers de cet ordinateur." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
@@ -480,6 +483,23 @@ function App() {
           </div>
 
           {notice && <div className="notice-line"><span className="notice-indicator"><AlertCircle size={15}/></span><span>{notice}</span>{updateAvailable && <button className="button button-primary button-small" disabled={installingUpdate} onClick={() => void installAppUpdate()}>{installingUpdate ? "Installation…" : "Installer la mise à jour"}</button>}<button aria-label="Fermer le message" onClick={() => setNotice("")}>×</button></div>}
+
+          {page === "companion" && (
+            <section className="page-body">
+              <CompanionPortal
+                onOpenScreenShare={(deviceId) => {
+                  if (deviceId && runtime) {
+                    invoke("launch_scrcpy", { serial: deviceId })
+                      .then(() => setNotice("scrcpy a été lancé pour " + deviceId))
+                      .catch((err) => setNotice("Erreur scrcpy : " + String(err)));
+                  } else {
+                    navigate("remote");
+                  }
+                }}
+                onOpenFileExplorer={() => navigate("files")}
+              />
+            </section>
+          )}
 
           {page === "assistant" && <CreationChat runtime={runtime} /> }
 

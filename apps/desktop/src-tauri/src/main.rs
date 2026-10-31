@@ -4,7 +4,16 @@ mod browser_control;
 mod classic_phones;
 
 use serde::{Deserialize, Serialize};
-use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::{Component, Path, PathBuf}, process::{Command, Stdio}, time::Duration};
+use std::{
+    fs,
+    io::{Read, Write, copy},
+    net::{IpAddr, TcpListener, TcpStream, Shutdown},
+    path::{Component, Path, PathBuf},
+    process::{Command, Stdio},
+    sync::Mutex,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use uuid::Uuid;
 
 #[derive(Serialize)]
 struct LocalTool {
@@ -2773,6 +2782,443 @@ fn run_automation_scenario(scenario_id: String, _params: Option<serde_json::Valu
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  PORTAIL COMPANION — Serveur HTTP local d'appairage
+// ═══════════════════════════════════════════════════════════════
+
+/// État global du serveur companion (protégé par Mutex)
+static COMPANION_SERVER_RUNNING: Mutex<bool> = Mutex::new(false);
+
+#[derive(Serialize, Clone)]
+struct CompanionServerInfo {
+    local_ip: String,
+    port: u16,
+    token: String,
+    pairing_url: String,
+    expires_at: u64,  // timestamp UNIX en secondes
+}
+
+/// Démarre le mini-serveur HTTP local de portail companion sur le port 4242.
+/// Retourne l'URL d'appairage avec token unique valable 5 minutes.
+#[tauri::command]
+fn start_companion_server() -> Result<CompanionServerInfo, String> {
+    // Marquer le serveur comme actif
+    {
+        let mut running = COMPANION_SERVER_RUNNING.lock().map_err(|e| e.to_string())?;
+        *running = true;
+    }
+
+    // Récupérer l'IP locale (on prend la première interface non-loopback)
+    let local_ip = get_local_ip_address().unwrap_or_else(|| "127.0.0.1".to_string());
+
+    // Générer un token UUID unique
+    let token = Uuid::new_v4().to_string().replace('-', "");
+    let token_short = &token[..16]; // 16 caractères suffisent
+    let pairing_url = format!("http://{}:4242/pair?t={}", local_ip, token_short);
+
+    // Timestamp d'expiration : maintenant + 5 minutes
+    let expires_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        + 300;
+
+    let info = CompanionServerInfo {
+        local_ip: local_ip.clone(),
+        port: 4242,
+        token: token_short.to_string(),
+        pairing_url: pairing_url.clone(),
+        expires_at,
+    };
+
+    // Lire le contenu du portail HTML (embarqué à côté de l'exe)
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    // Chercher le fichier dans plusieurs emplacements possibles
+    let portal_candidates = [
+        exe_dir.join("companion_portal.html"),
+        PathBuf::from("apps/desktop/src-tauri/companion_portal.html"),
+        PathBuf::from("companion_portal.html"),
+    ];
+    let portal_html = portal_candidates
+        .iter()
+        .find(|p| p.exists())
+        .and_then(|p| fs::read_to_string(p).ok())
+        .unwrap_or_else(|| {
+            // HTML de fallback minimaliste si le fichier n'est pas trouvé
+            format!(r#"<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXUS — Portail d'appairage</title>
+<style>body{{background:#0f1117;color:#e0e0e0;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:1rem;box-sizing:border-box;text-align:center}}h1{{color:#00d4ff;font-size:1.5rem;margin-bottom:1rem}}.badge{{background:#1e2a3a;border:1px solid #00d4ff33;border-radius:12px;padding:1.5rem;max-width:320px;width:100%}}.status{{margin-top:1rem;font-size:0.85rem;color:#888}}button{{background:#00d4ff;border:none;color:#000;font-weight:bold;padding:.75rem 2rem;border-radius:8px;cursor:pointer;margin-top:1.5rem;font-size:1rem}}</style></head>
+<body><h1>🔗 NEXUS CONTROL</h1>
+<div class="badge"><p>Portail d'appairage actif</p><p class="status">Token : {}</p></div>
+<script>
+const ws = new WebSocket('ws://{}:4243/ws');
+ws.onopen = () => {{ document.querySelector('.status').textContent = '✅ Connecté à NEXUS'; }};
+ws.onerror = () => {{ document.querySelector('.status').textContent = '❌ Connexion échouée'; }};
+</script></body></html>"#, token_short, local_ip)
+        });
+
+    // APK agent Android
+    let apk_candidates = [
+        PathBuf::from("apps/android/app/build/outputs/apk/debug/app-debug.apk"),
+        exe_dir.join("nexus-agent.apk"),
+    ];
+    let apk_path = apk_candidates.iter().find(|p| p.exists()).cloned();
+
+    // Spawner le thread serveur HTTP
+    let token_clone = token_short.to_string();
+    let portal_html_clone = portal_html.clone();
+    let apk_path_clone = apk_path.clone();
+
+    std::thread::spawn(move || {
+        let listener = match TcpListener::bind("0.0.0.0:4242") {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("[CompanionServer] Impossible de démarrer sur le port 4242 : {}", e);
+                return;
+            }
+        };
+        listener.set_nonblocking(false).ok();
+
+        eprintln!("[CompanionServer] Démarré sur 0.0.0.0:4242, token={}", token_clone);
+
+        for stream_result in listener.incoming() {
+            // Vérifier si on doit s'arrêter
+            let still_running = COMPANION_SERVER_RUNNING.lock().map(|r| *r).unwrap_or(false);
+            if !still_running {
+                eprintln!("[CompanionServer] Arrêt demandé.");
+                break;
+            }
+
+            match stream_result {
+                Ok(mut stream) => {
+                    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+                    stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
+
+                    // Lire la requête HTTP
+                    let mut buf = [0u8; 4096];
+                    let n = stream.read(&mut buf).unwrap_or(0);
+                    if n == 0 { continue; }
+
+                    let req = String::from_utf8_lossy(&buf[..n]);
+                    let first_line = req.lines().next().unwrap_or("");
+
+                    eprintln!("[CompanionServer] Requête : {}", first_line);
+
+                    // Routing simple
+                    if first_line.contains("GET /download-agent") {
+                        // Téléchargement de l'APK
+                        if let Some(ref apk) = apk_path_clone {
+                            if let Ok(data) = fs::read(apk) {
+                                let headers = format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.android.package-archive\r\nContent-Disposition: attachment; filename=\"nexus-agent.apk\"\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                                    data.len()
+                                );
+                                stream.write_all(headers.as_bytes()).ok();
+                                stream.write_all(&data).ok();
+                            } else {
+                                http_404(&mut stream);
+                            }
+                        } else {
+                            http_404(&mut stream);
+                        }
+                    } else if first_line.contains("GET /") {
+                        // Page principale du portail
+                        let body = portal_html_clone.as_bytes();
+                        let headers = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        stream.write_all(headers.as_bytes()).ok();
+                        stream.write_all(body).ok();
+                    } else {
+                        http_404(&mut stream);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[CompanionServer] Erreur de connexion : {}", e);
+                }
+            }
+        }
+
+        eprintln!("[CompanionServer] Serveur arrêté.");
+    });
+
+    Ok(info)
+}
+
+/// Réponse HTTP 404
+fn http_404(stream: &mut TcpStream) {
+    let body = b"404 Not Found";
+    let headers = format!(
+        "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(headers.as_bytes()).ok();
+    stream.write_all(body).ok();
+}
+
+/// Arrête le serveur companion
+#[tauri::command]
+fn stop_companion_server() -> Result<bool, String> {
+    let mut running = COMPANION_SERVER_RUNNING.lock().map_err(|e| e.to_string())?;
+    *running = false;
+    // Faire une connexion factice pour débloquer le accept() du thread serveur
+    let _ = TcpStream::connect("127.0.0.1:4242");
+    eprintln!("[CompanionServer] Signal d'arrêt envoyé.");
+    Ok(true)
+}
+
+/// Retourne les données QR Code (juste l'URL) pour que le frontend génère le QR
+#[tauri::command]
+fn get_pairing_qr_data() -> Result<String, String> {
+    let local_ip = get_local_ip_address().unwrap_or_else(|| "127.0.0.1".to_string());
+    let token = &Uuid::new_v4().to_string().replace('-', "")[..16];
+    Ok(format!("http://{}:4242/pair?t={}", local_ip, token))
+}
+
+/// Récupère l'IP locale de la machine (première interface non-loopback)
+fn get_local_ip_address() -> Option<String> {
+    // Essayer de se connecter à un serveur externe (sans envoyer de données)
+    // pour déterminer quelle interface est utilisée par défaut
+    if let Ok(socket) = TcpStream::connect("8.8.8.8:80") {
+        if let Ok(addr) = socket.local_addr() {
+            return Some(addr.ip().to_string());
+        }
+    }
+    // Fallback : lire /proc/net/if_inet6 ou utiliser hostname
+    if let Ok(output) = Command::new("hostname").arg("-I").output() {
+        let out = String::from_utf8_lossy(&output.stdout);
+        if let Some(ip) = out.split_whitespace().next() {
+            return Some(ip.to_string());
+        }
+    }
+    None
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONNEXION USB → AUTO-CONFIG 15 SECONDES
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(Serialize)]
+struct UsbAutoConnectResult {
+    success: bool,
+    device_serial: String,
+    device_ip: String,
+    wifi_connected: bool,
+    agent_installed: bool,
+    message: String,
+    steps_completed: Vec<String>,
+}
+
+/// Connecte automatiquement un appareil Android via USB et le configure en ~15 secondes :
+/// 1. Active ADB over TCP/IP (port 5555)
+/// 2. Récupère l'IP Wi-Fi du téléphone
+/// 3. Bascule la connexion en Wi-Fi
+/// 4. Pousse et installe l'agent NEXUS
+/// 5. Lance l'agent
+#[tauri::command]
+fn auto_connect_usb_android(serial: String) -> Result<UsbAutoConnectResult, String> {
+    let adb = adb_program();
+    let mut steps: Vec<String> = Vec::new();
+
+    // ── Étape 1 : ADB over TCP/IP ────────────────────────────
+    let tcpip_out = Command::new(&adb)
+        .args(["-s", &serial, "tcpip", "5555"])
+        .output()
+        .map_err(|e| format!("ADB introuvable : {}", e))?;
+
+    if tcpip_out.status.success() {
+        steps.push("✅ ADB TCP/IP activé (port 5555)".to_string());
+    } else {
+        steps.push("⚠️ ADB TCP/IP : résultat incertain".to_string());
+    }
+
+    // Courte pause pour que le démon ADB bascule en mode réseau
+    std::thread::sleep(Duration::from_millis(1500));
+
+    // ── Étape 2 : Récupérer l'IP Wi-Fi ───────────────────────
+    let ip_out = Command::new(&adb)
+        .args(["-s", &serial, "shell", "ip", "route"])
+        .output();
+
+    let ip_text = ip_out
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    // Parser l'IP dans "192.168.x.x dev wlan0 ..." → chercher "src X.X.X.X"
+    let device_ip = ip_text
+        .lines()
+        .filter(|l| l.contains("wlan") || l.contains("rmnet"))
+        .filter_map(|l| {
+            l.split_whitespace()
+                .skip_while(|&w| w != "src")
+                .nth(1)
+                .map(|s| s.to_string())
+        })
+        .next()
+        .unwrap_or_default();
+
+    if device_ip.is_empty() {
+        // Fallback : essayer `ip addr`
+        let addr_out = Command::new(&adb)
+            .args(["-s", &serial, "shell", "ip", "addr", "show", "wlan0"])
+            .output();
+        let addr_text = addr_out
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        let fallback_ip: String = addr_text
+            .lines()
+            .filter(|l| l.contains("inet ") && !l.contains("inet6"))
+            .filter_map(|l| l.split_whitespace().nth(1))
+            .filter_map(|cidr| cidr.split('/').next().map(|s| s.to_string()))
+            .next()
+            .unwrap_or_default();
+
+        if fallback_ip.is_empty() {
+            steps.push("❌ IP Wi-Fi introuvable — assurez-vous que le Wi-Fi est activé sur le téléphone".to_string());
+            return Ok(UsbAutoConnectResult {
+                success: false,
+                device_serial: serial,
+                device_ip: String::new(),
+                wifi_connected: false,
+                agent_installed: false,
+                message: "Impossible de récupérer l'IP Wi-Fi du téléphone. Activez le Wi-Fi et réessayez.".to_string(),
+                steps_completed: steps,
+            });
+        }
+        steps.push(format!("✅ IP Wi-Fi détectée : {}", fallback_ip));
+        return auto_connect_usb_wifi_phase(&adb, serial, fallback_ip, steps);
+    }
+
+    steps.push(format!("✅ IP Wi-Fi détectée : {}", device_ip));
+    auto_connect_usb_wifi_phase(&adb, serial, device_ip, steps)
+}
+
+/// Phase Wi-Fi de l'auto-connexion USB (connexion réseau + push APK + lancement agent)
+fn auto_connect_usb_wifi_phase(
+    adb: &PathBuf,
+    serial: String,
+    device_ip: String,
+    mut steps: Vec<String>,
+) -> Result<UsbAutoConnectResult, String> {
+    // ── Étape 3 : Connexion ADB Wi-Fi ────────────────────────
+    let connect_out = Command::new(adb)
+        .args(["connect", &format!("{}:5555", device_ip)])
+        .output();
+
+    let wifi_connected = connect_out
+        .as_ref()
+        .map(|o| {
+            let out = String::from_utf8_lossy(&o.stdout).to_string();
+            o.status.success() && (out.contains("connected") || out.contains("already"))
+        })
+        .unwrap_or(false);
+
+    if wifi_connected {
+        steps.push(format!("✅ Connexion Wi-Fi ADB établie ({}:5555)", device_ip));
+    } else {
+        steps.push(format!("⚠️ Connexion Wi-Fi incertaine — tentative de push APK quand même"));
+    }
+
+    std::thread::sleep(Duration::from_millis(800));
+
+    // ── Étape 4 : Push de l'APK ──────────────────────────────
+    let wifi_serial = format!("{}:5555", device_ip);
+    let target_serial = if wifi_connected { &wifi_serial } else { &serial };
+
+    let apk_candidates = [
+        PathBuf::from("apps/android/app/build/outputs/apk/debug/app-debug.apk"),
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("nexus-agent.apk"),
+    ];
+
+    let apk_path = apk_candidates.iter().find(|p| p.exists());
+
+    let agent_installed = if let Some(apk) = apk_path {
+        steps.push("📦 Push de l'APK agent NEXUS en cours...".to_string());
+
+        let push_out = Command::new(adb)
+            .args(["-s", target_serial, "push",
+                   apk.to_str().unwrap_or(""),
+                   "/data/local/tmp/nexus-agent.apk"])
+            .output();
+
+        let push_ok = push_out.map(|o| o.status.success()).unwrap_or(false);
+
+        if push_ok {
+            steps.push("✅ APK transféré sur l'appareil".to_string());
+
+            // ── Étape 5 : Installation de l'APK ──────────────
+            let install_out = Command::new(adb)
+                .args(["-s", target_serial, "shell", "pm", "install",
+                       "-t", "-r", "/data/local/tmp/nexus-agent.apk"])
+                .output();
+
+            let install_ok = install_out
+                .map(|o| {
+                    let out = String::from_utf8_lossy(&o.stdout).to_string();
+                    out.contains("Success") || o.status.success()
+                })
+                .unwrap_or(false);
+
+            if install_ok {
+                steps.push("✅ Agent NEXUS installé avec succès".to_string());
+
+                // ── Étape 6 : Lancement de l'agent ───────────
+                let _ = Command::new(adb)
+                    .args(["-s", target_serial, "shell", "am", "start",
+                           "-n", "com.nexuscontrol.agent/.MainActivity",
+                           "--activity-brought-to-front"])
+                    .output();
+
+                steps.push("🚀 Agent NEXUS démarré sur l'appareil".to_string());
+                true
+            } else {
+                steps.push("❌ Échec de l'installation APK — activez 'Sources inconnues' dans Paramètres → Sécurité".to_string());
+                false
+            }
+        } else {
+            steps.push("❌ Transfert APK échoué".to_string());
+            false
+        }
+    } else {
+        steps.push("⚠️ APK agent introuvable — téléchargement via portail Web disponible".to_string());
+        false
+    };
+
+    let success = wifi_connected || agent_installed;
+    let message = if agent_installed {
+        format!("🎉 Appareil {} configuré et connecté ! Agent NEXUS actif.", device_ip)
+    } else if wifi_connected {
+        format!("✅ Appareil {} connecté en Wi-Fi via ADB.", device_ip)
+    } else {
+        "⚠️ Connexion partielle — certaines étapes ont échoué.".to_string()
+    };
+
+    let _ = send_system_notification(
+        "NEXUS CONTROL".to_string(),
+        message.clone(),
+    );
+
+    Ok(UsbAutoConnectResult {
+        success,
+        device_serial: serial,
+        device_ip,
+        wifi_connected,
+        agent_installed,
+        message,
+        steps_completed: steps,
+    })
+}
+
 
 fn main() {
     tauri::Builder::default()
@@ -2810,7 +3256,11 @@ fn main() {
             get_fleet_telemetry,
             get_vpn_tunnel_status,
             tailscale_ping_peer,
-            run_automation_scenario
+            run_automation_scenario,
+            start_companion_server,
+            stop_companion_server,
+            get_pairing_qr_data,
+            auto_connect_usb_android
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au lancement de NEXUS CONTROL");

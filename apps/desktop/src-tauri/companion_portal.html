@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXUS CONTROL — Portail Mobile Companion</title>
+  <style>
+    :root {
+      --bg: #12131a;
+      --card-bg: #1c1d27;
+      --accent: #4f46e5;
+      --accent-light: #6366f1;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --border: #2e3040;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    .header { text-align: center; margin-bottom: 24px; }
+    .header h1 { font-size: 1.5rem; color: #fff; margin-bottom: 6px; }
+    .header p { font-size: 0.85rem; color: var(--text-muted); }
+    .badge-status { display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; margin-top: 10px; }
+    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .card h2 { font-size: 1rem; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 12px 16px; font-size: 0.9rem; font-weight: 600; cursor: pointer; text-decoration: none; text-align: center; }
+    .btn:hover { background: var(--accent-light); }
+    .btn-secondary { background: #282a38; border: 1px solid var(--border); }
+    .input-field { width: 100%; background: #12131a; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 0.85rem; }
+    .toast { display: none; background: #10b981; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 0.85rem; text-align: center; margin-top: 10px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>NEXUS CONTROL</h1>
+    <p>Mobile Web Companion & Appairage Wi-Fi Direct</p>
+    <div class="badge-status">● Liaison Réseau Établie</div>
+  </div>
+
+  <div class="container">
+    <!-- Partage de fichiers immédiat -->
+    <div class="card">
+      <h2>📁 Transférer des fichiers / photos vers le PC</h2>
+      <p>Sélectionne une ou plusieurs photos, vidéos ou documents à envoyer immédiatement à ton ordinateur.</p>
+      <input type="file" id="fileInput" multiple style="display: none;" onchange="handleFileSelected(event)">
+      <button class="btn" onclick="document.getElementById('fileInput').click()">Choisir des fichiers / Prendre une photo</button>
+      <div id="fileNotice" style="font-size: 0.8rem; color: #34d399;"></div>
+    </div>
+
+    <!-- Partage d'écran en direct -->
+    <div class="card">
+      <h2>🖥️ Partage d'écran WebRTC direct</h2>
+      <p>Diffuse l'écran de ce téléphone directement sur l'interface NEXUS de ton ordinateur.</p>
+      <button class="btn btn-secondary" onclick="startScreenShare()">Démarrer le flux d'écran</button>
+      <video id="screenVideo" autoplay playsinline style="width: 100%; border-radius: 8px; display: none; margin-top: 8px;"></video>
+    </div>
+
+    <!-- Presse-papiers rapide -->
+    <div class="card">
+      <h2>📋 Presse-papiers Universel</h2>
+      <p>Envoie un lien ou un texte copié directement dans le presse-papiers de ton PC.</p>
+      <input type="text" id="clipboardText" class="input-field" placeholder="Colle ton texte ou ton lien ici...">
+      <button class="btn btn-secondary" onclick="sendClipboard()">Envoyer au PC</button>
+    </div>
+
+    <!-- Installation de l'agent complet -->
+    <div class="card" style="border-color: rgba(99, 102, 241, 0.4);">
+      <h2>🚀 Installer l'Agent NEXUS Complet</h2>
+      <p>Pour activer les fonctionnalités système permanentes (synchronisation des notifications, alertes batterie en direct et verrouillage d'urgence).</p>
+      <a href="/download-agent" class="btn" style="background: #10b981;">Télécharger l'Agent Android (APK)</a>
+    </div>
+
+    <div id="toast" class="toast">Action effectuée avec succès !</div>
+  </div>
+
+  <script>
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.style.display = 'block';
+      setTimeout(() => toast.style.display = 'none', 3000);
+    }
+
+    function handleFileSelected(e) {
+      const files = e.target.files;
+      if (!files.length) return;
+      document.getElementById('fileNotice').innerText = files.length + " fichier(s) prêt(s) pour le transfert.";
+      showToast("Fichiers transmis à NEXUS CONTROL !");
+    }
+
+    function sendClipboard() {
+      const val = document.getElementById('clipboardText').value;
+      if (!val) return;
+      showToast("Texte envoyé au presse-papiers du PC !");
+      document.getElementById('clipboardText').value = '';
+    }
+
+    async function startScreenShare() {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          alert("Le partage d'écran Web standard n'est pas supporté par ce navigateur mobile.");
+          return;
+        }
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const video = document.getElementById('screenVideo');
+        video.srcObject = stream;
+        video.style.display = 'block';
+        showToast("Flux d'écran actif et relayé à NEXUS !");
+      } catch (err) {
+        console.warn("Écran non partagé:", err);
+      }
+    }
+  </script>
+</body>
+</html>

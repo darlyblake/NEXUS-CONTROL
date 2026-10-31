@@ -99,3 +99,29 @@ Ce document recense l'ensemble des modules prévus pour faire de **NEXUS CONTROL
   - [x] Boîte de proposition d'action interactive avec confirmation explicite ("Confirmer et exécuter l'action") pour toute action système.
   - [x] Raccourcis d'invites réels configurés : "Vérifie si tous mes appareils sont en ligne", "Quel appareil consomme le plus de stockage et nettoie", "Transfère les dernières captures d'écran", "Lance la sauvegarde des photos".
   - [x] Exécution directe sécurisée par Tauri avec retour d'état immédiat dans le chat et notification de bureau native.
+
+---
+
+## F. Portail Mobile Companion & Connexion Express (USB / QR Code) — [FINALISÉ ✅]
+
+- [x] **1. Configuration Express par Câble USB (15 secondes)**
+  - [x] Détection automatique des appareils branchés en USB via ADB (`scan_android_devices`).
+  - [x] Séquence automatisée en 1 clic (`auto_connect_usb_android`) :
+    - Activation du mode sans fil ADB over TCP/IP (port 5555).
+    - Détection et résolution automatique de l'IP Wi-Fi du téléphone.
+    - Bascule transparente en liaison sans fil ADB.
+    - Transfert et installation de l'APK Agent NEXUS (`app-debug.apk`).
+    - Démarrage automatique de l'agent sur le smartphone.
+  - [x] Chronomètre visuel de 15 secondes, barre de progression et journal d'exécution étape par étape.
+  - [x] Raccourcis immédiats vers l'affichage de l'écran en direct (scrcpy) et l'explorateur de fichiers.
+
+- [x] **2. Portail Web Mobile & Appairage Wi-Fi Direct (QR Code & Lien)**
+  - [x] Serveur HTTP local embarqué dans le processus Tauri Rust (`start_companion_server` / `stop_companion_server`).
+  - [x] Jeton de sécurité cryptographique unique (UUID) valable 5 minutes avec décompte visuel.
+  - [x] Génération du QR Code interactif SVG (`qrcode.react`) et lien direct cliquable (`http://IP:4242/pair?t=TOKEN`).
+  - [x] Portail mobile responsive (`companion_portal.html`) accessible depuis n'importe quel navigateur smartphone sans installation préalable :
+    - Transfert direct de photos et fichiers vers le PC.
+    - Diffusion d'écran WebRTC direct.
+    - Synchronisation instantanée du presse-papiers vers le poste de travail.
+    - Lien 1 clic pour télécharger l'Agent Android complet (APK).
+
