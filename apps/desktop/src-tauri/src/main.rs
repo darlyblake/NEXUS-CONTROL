@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod browser_control;
+mod classic_phones;
 
 use serde::{Deserialize, Serialize};
 use std::{fs, io::{Read, Write, copy}, net::{IpAddr, TcpStream, Shutdown}, path::{Component, Path, PathBuf}, process::{Command, Stdio}, time::Duration};
@@ -1983,6 +1984,8 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_local_tools,
+            classic_phones::scan_classic_phones,
+            classic_phones::get_classic_phone_tools,
             scan_android_devices,
             build_and_install_android,
             adb_push_file,
