@@ -4,15 +4,19 @@ import { ScreenSharePanel } from "./components/ScreenSharePanel";
 import { LocalAISettings } from "./components/LocalAIAgent";
 import { CreationChat } from "./components/CreationChat";
 import { ClassicPhones } from "./components/ClassicPhones";
+import { DoublePanelFileExplorer } from "./components/DoublePanelFileExplorer";
+import { ContinuityDashboard } from "./components/ContinuityDashboard";
+import { AutomationsEngine } from "./components/AutomationsEngine";
+import { RemoteAccessPanel } from "./components/RemoteAccessPanel";
 import {
   Activity, AlertCircle, Apple, ArrowDownToLine, ArrowUpRight, Bot, Check, FileDown, FileUp,
   ChevronDown, CircleHelp, Clock3, Command, Cpu, FileText, Folder, Gauge,
   HardDrive, LayoutDashboard, Link2, LockKeyhole, Monitor, MonitorSmartphone,
   MoreHorizontal, Network, Plus, Radar, RefreshCw, Search, Settings2, ShieldCheck,
-  Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert, ImagePlus
+  Smartphone, Terminal, Tv, Wifi, WifiOff, Workflow, Wrench, Zap, Camera, MapPin, MessageSquare, Volume2, ShieldAlert, ImagePlus, Radio
 } from "lucide-react";
 
-type Page = "overview" | "assistant" | "classic" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
+type Page = "overview" | "assistant" | "continuity" | "classic" | "devices" | "files" | "remote" | "network" | "integrations" | "automations" | "activity" | "security" | "protection" | "settings";
 type NetworkDevice = { ip: string; hostname: string; mac: string; kind: string; manufacturer: string; model: string; deviceType: string; osGuess: string; evidence: string[]; connection: string; adbStatus: string };
 type LocalTool = { id: string; label: string; installed: boolean; detail: string };
 type AuditCheck = { id: string; label: string; status: string; detail: string };
@@ -21,10 +25,11 @@ type UpdateInfo = { currentVersion: string; version: string; downloadUrl: string
 
 const nav: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Vue d'ensemble", icon: LayoutDashboard },
+  { id: "continuity", label: "Continuité & Santé", icon: Radio },
   { id: "assistant", label: "Assistant IA", icon: Bot },
   { id: "devices", label: "Mes appareils", icon: MonitorSmartphone },
   { id: "classic", label: "Téléphones classiques", icon: Smartphone },
-  { id: "files", label: "Transfert de fichiers", icon: Folder },
+  { id: "files", label: "Explorateur de fichiers", icon: Folder },
   { id: "remote", label: "Accès distant", icon: Link2 },
   { id: "network", label: "Analyse réseau", icon: Radar },
   { id: "integrations", label: "Intégrations", icon: Network },
@@ -39,14 +44,15 @@ const secondaryNav: { id: Page; label: string; icon: typeof ShieldCheck }[] = [
 
 const pageTitles: Record<Page, { title: string; subtitle: string }> = {
   overview: { title: "Vue d'ensemble", subtitle: "L'état de ton centre de contrôle, en un seul endroit." },
+  continuity: { title: "Continuité & Surveillance", subtitle: "Presse-papiers partagé, notifications en direct et télémétrie de tes appareils." },
   assistant: { title: "Assistant IA", subtitle: "Chat local et agent IA avec accès contrôlé aux fichiers de cet ordinateur." },
   devices: { title: "Mes appareils", subtitle: "Appareils enregistrés et appareils détectés localement." },
   classic: { title: "Téléphones classiques", subtitle: "Détection USB et diagnostic des téléphones à touches et appareils non Android." },
-  files: { title: "Transfert de fichiers", subtitle: "Échanges de fichiers entre appareils compatibles ; ADB Android est le premier connecteur disponible." },
+  files: { title: "Explorateur de fichiers", subtitle: "Explorateur double panneau interactif entre ton PC et tes appareils distants." },
   remote: { title: "Accès distant", subtitle: "Connecte un PC, un appareil Android ou un appareil Apple selon les fonctions autorisées par son système." },
   network: { title: "Analyse réseau", subtitle: "Découvre les appareils qui répondent sur le même réseau local." },
   integrations: { title: "Intégrations", subtitle: "Connecteurs logiciels utilisés par NEXUS CONTROL." },
-  automations: { title: "Automatisations", subtitle: "Prépare des tâches répétables, avec contrôle et journalisation." },
+  automations: { title: "Automatisations", subtitle: "Moteur d'automatisations sécurisées, tâches programmées et scénarios d'urgence." },
   activity: { title: "Journal d'activité", subtitle: "Historique des vérifications et des opérations locales." },
   security: { title: "Sécurité", subtitle: "Les accès distants restent désactivés tant qu'ils ne sont pas configurés." },
   protection: { title: "Protection antivol", subtitle: "Commandes de protection Android, état des capacités et préparation de l'administration de l'appareil." },
@@ -477,6 +483,10 @@ function App() {
 
           {page === "assistant" && <CreationChat runtime={runtime} /> }
 
+          {page === "continuity" && <section className="page-body">
+            <ContinuityDashboard runtime={runtime} onNotice={setNotice} />
+          </section>}
+
           {page === "overview" && <section className="page-body">
             <div className="welcome-panel">
               <div className="welcome-copy"><div className="welcome-chip"><Zap size={13}/> VOTRE ESPACE PERSONNEL</div><h2>Tout ton environnement.<br/><span>Un seul centre de contrôle.</span></h2><p>Connecte tes appareils, vérifie leur disponibilité et centralise tes outils de gestion à distance.</p><button className="button button-light" onClick={() => navigate("integrations")}>Configurer les intégrations <ArrowUpRight size={16}/></button></div>
@@ -530,31 +540,22 @@ function App() {
           {page === "files" && <section className="page-body">
             <div className="network-hero">
               <div className="network-hero-icon"><Folder size={25}/></div>
-              <div className="network-hero-copy"><h2>Fichiers Android par USB / ADB</h2><p>Transfert réel entre le PC et un téléphone Android autorisé. Le téléphone doit apparaître comme « device » dans Mes appareils. Cette première version utilise ADB et ne fonctionne pas encore à travers Internet.</p></div>
+              <div className="network-hero-copy">
+                <h2>Explorateur de fichiers distant double panneau</h2>
+                <p>Navigue, transfère et synchronise tes fichiers en direct entre ce PC et ton appareil Android autorisé via ADB ou Wi-Fi local.</p>
+              </div>
               <button className="button button-secondary" onClick={() => void refreshLocal()} disabled={checking}><RefreshCw size={15} className={checking ? "spin" : ""}/> Actualiser</button>
             </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Appareil cible</h3><p>Sélectionne le téléphone qui recevra ou fournira le fichier.</p></div><span className="count-pill">{android.filter(d => d.state === "device").length} autorisé(s)</span></div>
-              {android.filter(d => d.state === "device").length === 0 ? <EmptyState icon={<Smartphone size={24}/>} title="Aucun téléphone prêt" description="Branche le téléphone avec un câble USB de données, active le débogage USB et accepte la demande d'autorisation Android. Puis actualise." action="Détecter les appareils" onAction={() => void refreshLocal()}/> :
-              <div className="network-filters"><label>Appareil Android<select id="file-android-device" defaultValue={android.find(d => d.state === "device")?.id}>{android.filter(d => d.state === "device").map(d => <option key={d.id} value={d.id}>{d.model} — {d.id}</option>)}</select></label></div>}
-            </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Envoyer un fichier du PC vers Android</h3><p>Saisis le chemin absolu du fichier sur Ubuntu et le dossier de destination sur le téléphone.</p></div><FileUp size={19}/></div>
-              <label className="remote-field-label" htmlFor="nexus-local-file">Fichier sur le PC (chemin absolu)</label>
-              <input id="nexus-local-file" className="remote-server-input" placeholder="/home/utilisateur/Téléchargements/document.pdf" value={fileLocalPath} onChange={e => setFileLocalPath(e.target.value)}/>
-              <label className="remote-field-label" htmlFor="nexus-android-destination">Destination Android</label>
-              <input id="nexus-android-destination" className="remote-server-input" placeholder="/sdcard/Download/" value={fileAndroidPath} onChange={e => setFileAndroidPath(e.target.value)}/>
-              <div className="heading-actions remote-actions"><button className="button button-primary" disabled={fileBusy || !fileLocalPath.trim() || !android.some(d => d.state === "device")} onClick={() => {
-                const select = document.getElementById("file-android-device") as HTMLSelectElement | null;
-                const serial = select?.value || android.find(d => d.state === "device")?.id;
-                if (!serial) { setNotice("Aucun appareil Android autorisé."); return; }
-                setFileBusy(true);
-                void invoke<string>("adb_push_file", { serial, localPath: fileLocalPath.trim(), remotePath: fileAndroidPath.trim() || "/sdcard/Download/" })
-                  .then(setNotice).catch(error => setNotice("Envoi échoué : " + String(error))).finally(() => setFileBusy(false));
-              }}><FileUp size={16}/>{fileBusy ? "Transfert en cours…" : "Envoyer vers Android"}</button></div>
-            </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Envoyer vers Android par Wi-Fi</h3><p>Pour envoyer sans câble, ouvre la page Réception dans l'application Android, démarre le récepteur et recopie l'adresse et le jeton affichés.</p></div><Wifi size={19}/></div>
+
+            {/* Explorateur Double Panneau Moderne */}
+            <DoublePanelFileExplorer 
+              runtime={runtime} 
+              androidDevices={android} 
+              onNotice={setNotice} 
+            />
+
+            <div className="panel device-panel" style={{ marginTop: "20px" }}>
+              <div className="panel-header"><div><h3>Transfert manuel avancé par Wi-Fi local</h3><p>Pour envoyer sans câble USB, ouvre la page Réception dans l'application Android, démarre le récepteur et recopie l'adresse et le jeton affichés.</p></div><Wifi size={19}/></div>
               <label className="remote-field-label" htmlFor="nexus-wifi-receiver-url">Adresse locale Android</label>
               <input id="nexus-wifi-receiver-url" className="remote-server-input" placeholder="http://192.168.1.20:8765" value={wifiReceiverUrl} onChange={e => setWifiReceiverUrl(e.target.value)}/>
               <label className="remote-field-label" htmlFor="nexus-wifi-receiver-token">Jeton de réception</label>
@@ -566,88 +567,54 @@ function App() {
               }}><Wifi size={16}/>{fileBusy ? "Transfert en cours…" : "Envoyer par Wi-Fi"}</button></div>
               <div className="info-banner"><ShieldCheck size={17}/><div><strong>Réseau local uniquement</strong><p>Les deux appareils doivent être sur le même Wi-Fi. Le jeton protège le transfert, mais ce protocole local n'utilise pas HTTPS. N'active pas la réception sur un réseau public et arrête-la après usage.</p></div></div>
             </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Récupérer un fichier depuis Android</h3><p>Indique un chemin de fichier existant sur Android et le chemin de destination sur le PC.</p></div><FileDown size={19}/></div>
-              <label className="remote-field-label" htmlFor="nexus-android-source">Fichier Android (chemin absolu)</label>
-              <input id="nexus-android-source" className="remote-server-input" placeholder="/sdcard/Download/document.pdf" value={fileAndroidSource} onChange={e => setFileAndroidSource(e.target.value)}/>
-              <label className="remote-field-label" htmlFor="nexus-local-destination">Enregistrer sur le PC (chemin absolu)</label>
-              <input id="nexus-local-destination" className="remote-server-input" placeholder="/home/utilisateur/Téléchargements/document.pdf" value={filePcDestination} onChange={e => setFilePcDestination(e.target.value)}/>
-              <div className="heading-actions remote-actions"><button className="button button-secondary" disabled={fileBusy || !filePcDestination.trim() || !fileAndroidSource.trim() || !android.some(d => d.state === "device")} onClick={() => {
-                const select = document.getElementById("file-android-device") as HTMLSelectElement | null;
-                const serial = select?.value || android.find(d => d.state === "device")?.id;
-                if (!serial) { setNotice("Aucun appareil Android autorisé."); return; }
-                setFileBusy(true);
-                void invoke<string>("adb_pull_file", { serial, remotePath: fileAndroidSource.trim(), localPath: filePcDestination.trim() })
-                  .then(setNotice).catch(error => setNotice("Récupération échouée : " + String(error))).finally(() => setFileBusy(false));
-              }}><FileDown size={16}/>{fileBusy ? "Transfert en cours…" : "Récupérer sur le PC"}</button></div>
-              <div className="info-banner"><CircleHelp size={17}/><div><strong>Limite de cette première étape</strong><p>Le transfert fonctionne seulement avec ADB autorisé via USB ou ADB réseau déjà configuré. L'accès à distance par Internet nécessitera un agent/serveur sécurisé ; ne publie jamais le port ADB sur Internet.</p></div></div>
-            </div>
           </section>}
 
-          {page === "remote" && <section className="page-body">
-            <div className="network-hero">
-              <div className="network-hero-icon"><Link2 size={25}/></div>
-              <div className="network-hero-copy"><h2>Connecter tous tes appareils</h2><p>NEXUS CONTROL vise les connexions PC ↔ PC, PC ↔ Android, PC ↔ iPhone/iPad et les connexions mobiles compatibles. Le contrôleur et l’appareil distant peuvent être de types différents ; les fonctions disponibles dépendent du système et des autorisations. Configure ici le serveur sécurisé pour les appareils compatibles. Aucun port entrant n’est ouvert sur cet ordinateur.</p></div>
-            </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Relier un appareil par Internet</h3><p>Association temporaire entre ce PC et un agent NEXUS CONTROL Windows ou Android, même si les appareils ne partagent pas le Wi-Fi.</p></div><span className="count-pill">MVP</span></div>
-              <label className="remote-field-label" htmlFor="nexus-relay-url">URL HTTPS du relais NEXUS</label>
-              <input id="nexus-relay-url" className="remote-server-input" type="url" placeholder="https://relais.ton-domaine.tld" value={remoteRelayUrl} onChange={event => { const value = event.target.value; setRemoteRelayUrl(value); try { localStorage.setItem("nexus.remoteRelayUrl", value.trim()); } catch { /* stockage facultatif */ } }} />
-              <div className="heading-actions remote-actions"><button className="button button-primary" disabled={!remoteRelayUrl.trim() || openingRemoteConsole} onClick={() => void createRemotePair()}><Link2 size={16}/>{openingRemoteConsole ? "Connexion…" : "Créer un code d'association"}</button></div>
-              {remotePairCode && <div className="security-row"><div className="security-row-icon secure"><LockKeyhole size={16}/></div><div className="security-row-copy"><strong>Code temporaire : {remotePairCode}</strong><span>À saisir sur l’appareil cible dans les 5 minutes. Ne le partage pas publiquement.</span></div><button className="button button-secondary" onClick={() => { void navigator.clipboard?.writeText(remotePairCode); setNotice("Code copié si le presse-papiers est disponible."); }}>Copier</button></div>}
-              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>État du relais</strong><span>{remoteRelayStatus}</span></div></div>
-              {remotePeerRole === "windows" && <ScreenSharePanel socket={remoteSocketRef.current} connected={remoteRelayStatus.includes("connecté") || remoteRelayStatus.includes("authentifié")} onNotice={setNotice} />}
-              {remotePeerRole === "windows" && <div className="panel device-panel">
-                <div className="panel-header"><div><h3>Contrôle Windows</h3><p>Commandes envoyées uniquement à l’agent Windows authentifié dans cette association.</p></div><Terminal size={20}/></div>
-                <div className="heading-actions remote-actions">
-                  <button className="button button-secondary" onClick={() => sendWindowsCommand("windows_status")}><Monitor size={16}/>État du PC</button>
-                  <button className="button button-secondary" onClick={() => sendWindowsCommand("windows_list_processes")}><Activity size={16}/>Lister les processus</button>
-                </div>
-                <label className="remote-field-label" htmlFor="windows-powershell-script">Script PowerShell (limite 8000 caractères)</label>
-                <textarea id="windows-powershell-script" className="remote-server-input" rows={6} value={remotePowerShellScript} onChange={event => setRemotePowerShellScript(event.target.value)} spellCheck={false}/>
-                <div className="heading-actions remote-actions"><button className="button button-primary" onClick={() => sendWindowsCommand("windows_run_powershell")}><Terminal size={16}/>Exécuter sur Windows</button></div>
-                <p className="remote-description">PowerShell distant doit avoir été activé explicitement pendant l’installation sur Windows. Il s’exécute avec l’identité du service et peut être privilégié. Ne l’utilise que sur un appareil que tu administres.</p>
-                <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Résultat</strong><span style={{ whiteSpace: "pre-wrap" }}>{remoteCommandResult}</span></div></div>
-              </div>}
-              {remoteDesktopToken && <div className="heading-actions remote-actions"><button className="button button-secondary" onClick={() => {
+          {page === "remote" && (
+            <RemoteAccessPanel
+              socket={remoteSocketRef.current}
+              connected={remoteRelayStatus.includes("connecté") || remoteRelayStatus.includes("authentifié")}
+              remoteRelayUrl={remoteRelayUrl}
+              setRemoteRelayUrl={(val) => {
+                setRemoteRelayUrl(val);
+                try { localStorage.setItem("nexus.remoteRelayUrl", val.trim()); } catch { /* stockage facultatif */ }
+              }}
+              remotePairCode={remotePairCode}
+              remoteDesktopToken={remoteDesktopToken}
+              remoteRelayStatus={remoteRelayStatus}
+              createRemotePair={createRemotePair}
+              revokePair={() => {
                 const base = remoteRelayUrl.trim().replace(/\/$/, "");
-                void fetch(base + "/api/revoke", { method: "POST", headers: { "authorization": "Bearer " + remoteDesktopToken } })
-                  .then(async response => { if (!response.ok) throw new Error("Le relais n'a pas confirmé la révocation."); setNotice("Association révoquée côté serveur."); setRemoteDesktopToken(""); setRemotePairCode(""); setRemoteRelayStatus("Association révoquée"); remoteSocketRef.current?.close(); remoteSocketRef.current = null; })
-                  .catch(error => setNotice("Révocation impossible : " + String(error)));
-              }}><LockKeyhole size={16}/>Révoquer cette association</button></div>}
-              <div className="info-banner"><ShieldCheck size={17}/><div><strong>Fonction en cours d'intégration</strong><p>Ce panneau crée un code et ouvre la connexion au relais. Le relais doit d'abord être déployé en HTTPS/WSS. Le canal transporte des messages, mais le transfert de fichiers et le contrôle d'écran ne sont pas encore branchés à ce canal.</p></div></div>
-            </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Serveur distant</h3><p>Adresse publique de ta console, par exemple https://controle.ton-domaine.tld</p></div><span className="count-pill">HTTPS requis</span></div>
-              <label className="remote-field-label" htmlFor="remote-server-url">URL publique MeshCentral</label>
-              <input id="remote-server-url" className="remote-server-input" type="url" placeholder="https://controle.exemple.com" value={remoteServerUrl} onChange={event => { setRemoteServerUrl(event.target.value); try { localStorage.setItem("nexus.remoteServerUrl", event.target.value.trim()); } catch { /* stockage facultatif */ } }} />
-              <div className="heading-actions remote-actions">
-                <button className="button button-primary" disabled={!remoteServerUrl.trim() || openingRemoteConsole} onClick={() => {
-                  if (!isDesktopRuntime()) {
-                    try { const parsed = new URL(remoteServerUrl); if (parsed.protocol !== "https:") { setNotice("Utilise une adresse HTTPS pour protéger la connexion."); return; } window.open(parsed.toString(), "_blank", "noopener,noreferrer"); }
-                    catch { setNotice("Adresse du serveur invalide."); }
-                    return;
-                  }
-                  setOpeningRemoteConsole(true);
-                  void invoke<string>("open_remote_console", { url: remoteServerUrl.trim() }).then(message => setNotice(message)).catch(error => setNotice(String(error))).finally(() => setOpeningRemoteConsole(false));
-                }}><ArrowUpRight size={16}/>{openingRemoteConsole ? "Ouverture…" : "Ouvrir la console distante"}</button>
-                <button className="button button-secondary" onClick={() => { setRemoteServerUrl(""); try { localStorage.removeItem("nexus.remoteServerUrl"); } catch { /* stockage facultatif */ } }}>Effacer l'adresse</button>
-              </div>
-            </div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>Tester une solution multiplateforme</h3><p>RustDesk peut servir à tester certaines connexions entre PC et Android. Pour iPhone/iPad, le partage d’écran et le contrôle sont limités par iOS/iPadOS ; ne pas supposer qu’un contrôle complet est possible.</p></div><Smartphone size={20}/></div>
-              <p className="remote-description">RustDesk propose un client Android et un client de bureau. Installe-les uniquement depuis les sources officielles, associe les appareils avec un identifiant et un mot de passe, puis accorde manuellement les autorisations Android nécessaires. Les fonctions disponibles dépendent du téléphone et de sa version d'Android.</p>
-              <div className="heading-actions remote-actions"><button className="button button-primary" onClick={() => { setOpeningRemoteConsole(true); void invoke<string>("open_remote_console", { url: "https://rustdesk.com/" }).then(message => setNotice("Site officiel RustDesk ouvert. Installe les clients PC et Android depuis ce site, puis configure une session autorisée.")).catch(error => setNotice(String(error))).finally(() => setOpeningRemoteConsole(false)); }} disabled={openingRemoteConsole}><ArrowUpRight size={16}/>{openingRemoteConsole ? "Ouverture…" : "Ouvrir le site officiel RustDesk"}</button></div>
-            </div>
-            <div className="info-banner"><ShieldCheck size={17}/><div><strong>Avant de contrôler un appareil</strong><p>1. Déployer MeshCentral sur un serveur accessible en HTTPS. 2. Installer l'agent officiel sur l'ordinateur distant et approuver son rattachement. 3. Se connecter à la console et limiter les droits aux opérateurs autorisés. 4. Utiliser les fonctions de partage/invitation du serveur lorsqu'un accès temporaire est nécessaire.</p></div></div>
-            <div className="panel device-panel">
-              <div className="panel-header"><div><h3>État de l'intégration</h3><p>NEXUS CONTROL ne déclare pas une session active sans vérification du serveur.</p></div></div>
-              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Serveur public</strong><span>À configurer et à vérifier</span></div><span className="security-state pending-text">En attente</span></div>
-              <div className="security-row"><div className="security-row-icon pending"><Clock3 size={16}/></div><div className="security-row-copy"><strong>Contrôle distant et transfert de fichiers</strong><span>Selon les permissions et les capacités du serveur/agent.</span></div><span className="security-state pending-text">Non vérifiés</span></div>
-              <div className="security-row"><div className="security-row-icon secure"><Check size={16}/></div><div className="security-row-copy"><strong>Autorisation explicite</strong><span>Ne partage pas une invitation avec une personne non autorisée. Révoque les accès qui ne sont plus nécessaires.</span></div><span className="security-state secure-text">Obligatoire</span></div>
-            </div>
-            <div className="info-banner"><CircleHelp size={17}/><div><strong>Important pour Android</strong><p>Cette console ne donne pas automatiquement le contrôle d'un téléphone Android. Le contrôle Android nécessite un connecteur compatible, une configuration prise en charge par le téléphone et une autorisation explicite sur celui-ci.</p></div></div>
-          </section>}
+                void fetch(base + "/api/revoke", { method: "POST", headers: { authorization: "Bearer " + remoteDesktopToken } })
+                  .then(async (response) => {
+                    if (!response.ok) throw new Error("Le relais n'a pas confirmé la révocation.");
+                    setNotice("Association révoquée côté serveur.");
+                    setRemoteDesktopToken("");
+                    setRemotePairCode("");
+                    setRemoteRelayStatus("Association révoquée");
+                    remoteSocketRef.current?.close();
+                    remoteSocketRef.current = null;
+                  })
+                  .catch((error) => setNotice("Révocation impossible : " + String(error)));
+              }}
+              remotePeerRole={remotePeerRole}
+              sendWindowsCommand={sendWindowsCommand}
+              remotePowerShellScript={remotePowerShellScript}
+              setRemotePowerShellScript={setRemotePowerShellScript}
+              remoteCommandResult={remoteCommandResult}
+              onNotice={setNotice}
+              onOpenRemoteConsole={(url) => {
+                if (!isDesktopRuntime()) {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                  return;
+                }
+                setOpeningRemoteConsole(true);
+                void invoke<string>("open_remote_console", { url })
+                  .then((msg) => setNotice(msg))
+                  .catch((err) => setNotice(String(err)))
+                  .finally(() => setOpeningRemoteConsole(false));
+              }}
+            />
+          )}
 
           {page === "network" && <section className="page-body">
             <div className="network-hero">
@@ -729,7 +696,9 @@ function App() {
             </div>
           </section>}
 
-          {page === "automations" && <section className="page-body"><div className="empty-page"><div className="empty-illustration"><Workflow size={30}/></div><h2>Les automatisations arrivent ensuite</h2><p>Le moteur sera ajouté après l'intégration sécurisée des connecteurs. Les tâches seront explicites, limitées en permissions et journalisées.</p><div className="roadmap-list"><div><Check size={16}/> Définir les appareils et leurs capacités</div><div><Check size={16}/> Mettre en place les permissions et l'historique</div><div><Clock3 size={16}/> Ajouter les déclencheurs et planifications</div></div><button className="button button-primary" onClick={() => navigate("security")}>Consulter la sécurité <ArrowUpRight size={15}/></button></div></section>}
+          {page === "automations" && <section className="page-body">
+            <AutomationsEngine runtime={runtime} onNotice={setNotice} />
+          </section>}
 
           {page === "activity" && <section className="page-body"><div className="panel"><div className="panel-header"><div><h3>Journal de cette session</h3><p>Événements visibles de l'interface.</p></div><span className="count-pill">{lastCheck ? "Vérification effectuée" : "En attente"}</span></div><div className="activity-row"><div className="activity-icon"><Activity size={17}/></div><div className="activity-copy"><strong>Interface NEXUS CONTROL initialisée</strong><span>Les commandes distantes ne sont pas activées par défaut.</span></div><span className="activity-time">Session actuelle</span></div>{lastCheck && <div className="activity-row"><div className="activity-icon"><RefreshCw size={17}/></div><div className="activity-copy"><strong>Vérification des outils locaux</strong><span>ADB, scrcpy, Node.js et présence de MeshCentral.</span></div><span className="activity-time">{lastCheck}</span></div>}</div><div className="info-banner"><FileText size={17}/><div><strong>Ce journal est provisoire.</strong><p>La persistance et l'audit des actions seront ajoutés dans le service local, avant l'activation du contrôle à distance.</p></div></div></section>}
 

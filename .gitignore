@@ -36,3 +36,15 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Android
+.gradle/
+build/
+local.properties
+apps/android/.gradle/
+apps/android/app/build/
+apps/android/local.properties
+apps/android/.idea/
+
+# Tauri generated
+apps/desktop/src-tauri/gen/

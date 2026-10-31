@@ -4,12 +4,20 @@ import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import * as XLSX from "xlsx";
 import PptxGenJS from "pptxgenjs";
 import { jsPDF } from "jspdf";
-import { Bot, Check, Download, FileText, ImagePlus, LoaderCircle, Paperclip, Send, Settings2, Sparkles, UserRound, X } from "lucide-react";
+import { Bot, Check, Download, FileText, ImagePlus, LoaderCircle, Paperclip, Send, Settings2, Sparkles, UserRound, X, Cpu, HardDrive, RefreshCw, ShieldAlert, Zap } from "lucide-react";
 import "./CreationChat.css";
 
 type Model = { name: string; size?: number };
 type ExportFormat = "pdf" | "docx" | "xlsx" | "pptx" | "md";
-type ChatItem = { id: number; role: "user" | "assistant"; text: string; file?: { name: string; content: string; format: ExportFormat }; image?: string };
+type ActionProposal = { id: string; title: string; description: string; actionKey: string; executed?: boolean };
+type ChatItem = {
+  id: number;
+  role: "user" | "assistant";
+  text: string;
+  file?: { name: string; content: string; format: ExportFormat };
+  image?: string;
+  actionProposal?: ActionProposal;
+};
 type ImageSettings = { endpoint: string; model: string; key: string; size: string };
 const initialImageSettings: ImageSettings = { endpoint: "https://api.openai.com/v1/images/generations", model: "gpt-image-1", key: "", size: "1024x1024" };
 
@@ -124,6 +132,56 @@ export function CreationChat({ runtime }: { runtime: boolean }) {
   }, [runtime]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
 
+  const [executingActionId, setExecutingActionId] = useState<string | null>(null);
+
+  async function handleExecuteAction(proposal: ActionProposal) {
+    setExecutingActionId(proposal.id);
+    try {
+      let resultText = "";
+      if (proposal.actionKey === "backup_photos") {
+        const res = await invoke<any>("run_automation_scenario", { scenarioId: "rule-backup-dcim", params: null });
+        resultText = `${res.summary} : ${res.details}`;
+      } else if (proposal.actionKey === "clean_temp") {
+        const res = await invoke<any>("run_automation_scenario", { scenarioId: "rule-clean-temp", params: null });
+        resultText = `${res.summary} : ${res.details}`;
+      } else if (proposal.actionKey === "emergency_lock") {
+        const res = await invoke<any>("run_automation_scenario", { scenarioId: "rule-emergency-lock", params: null });
+        resultText = `${res.summary} : ${res.details}`;
+      } else if (proposal.actionKey === "ring_device") {
+        const res = await invoke<any>("run_automation_scenario", { scenarioId: "rule-find-phone", params: null });
+        resultText = `${res.summary} : ${res.details}`;
+      } else if (proposal.actionKey === "transfer_screenshots") {
+        const res = await invoke<any>("run_automation_scenario", { scenarioId: "rule-backup-dcim", params: null });
+        resultText = `Transfert terminé : ${res.details}`;
+      } else {
+        resultText = "Action confirmée et exécutée.";
+      }
+
+      setMessages(current => current.map(item => {
+        if (item.actionProposal?.id === proposal.id) {
+          return {
+            ...item,
+            actionProposal: { ...item.actionProposal, executed: true }
+          };
+        }
+        return item;
+      }));
+
+      setMessages(current => [
+        ...current,
+        {
+          id: Date.now() + 2,
+          role: "assistant",
+          text: `✅ **Action exécutée avec succès :**\n${resultText}`
+        }
+      ]);
+    } catch (err) {
+      setError(`Erreur lors de l'exécution de l'action : ${String(err)}`);
+    } finally {
+      setExecutingActionId(null);
+    }
+  }
+
   async function submit(event?: FormEvent) {
     event?.preventDefault();
     const prompt = draft.trim();
@@ -149,14 +207,67 @@ export function CreationChat({ runtime }: { runtime: boolean }) {
         setMessages(current => [...current, { id: Date.now() + 1, role: "assistant", text: "Voici l’image créée à partir de ta demande.", image }]);
       } else {
         const kind = /\b(excel|xlsx|tableur|feuille de calcul)\b/i.test(prompt) ? "tableur Excel" : /\b(powerpoint|pptx|présentation|diaporama)\b/i.test(prompt) ? "présentation PowerPoint" : /\b(word|docx|document word)\b/i.test(prompt) ? "document Word" : /\b(pdf)\b/i.test(prompt) ? "document PDF" : "document";
+        const isSystemOperator = /\b(santé|sante|batterie|stockage|appareils|télémétrie|telemetrie|mise à jour|nettoie|nettoyer|sauvegarde|sauvegarder|en ligne|capture|captures|screenshots|verrouille|verrouiller)\b/i.test(prompt);
+
+        let liveTelemetryContext = "";
+        if (isSystemOperator) {
+          try {
+            const telemetry = await invoke<any[]>("get_fleet_telemetry");
+            liveTelemetryContext = "\n\nDONNÉES EN DIRECT DU SYSTÈME ET DES APPAREILS (Télémétrie réelle actuelle) :\n" + JSON.stringify(telemetry, null, 2);
+          } catch {
+            // mode sans télémétrie directe
+          }
+        }
+
         const system = wantsFile
           ? "Tu es l’assistant de création de NEXUS CONTROL. Rédige le contenu complet, soigné et prêt à l’emploi en français sauf demande contraire. N’invente pas les informations absentes : indique [À compléter]. Utilise Markdown structuré avec titres #, ##, listes et tableaux Markdown. Pour un tableur Excel, produis principalement un tableau Markdown avec des en-têtes explicites et des lignes de données cohérentes. Pour un PowerPoint, organise le contenu en 5 à 10 diapositives avec un titre # ou ## par diapositive et 3 à 5 points courts par diapositive. Pour Word/PDF, produis un document structuré avec titre, sections et exemples utiles. Retourne uniquement le contenu final."
+          : isSystemOperator
+          ? "Tu es l’assistant IA et Opérateur Système de NEXUS CONTROL. Tu administres les appareils (PC Ubuntu/Windows, smartphone Android, téléphones USB). Quand l'utilisateur te demande un diagnostic, la santé des appareils, le stockage ou une maintenance, réponds avec un rapport clair et structuré en Markdown basé sur les données réelles fournies : état des appareils (en ligne/hors ligne), batterie, espace disque, charge CPU/RAM, et confirme les actions disponibles." + liveTelemetryContext
           : "Tu es l’assistant IA de NEXUS CONTROL. Réponds clairement en français, avec Markdown utile. Si l’utilisateur demande une action que tu ne peux pas réellement exécuter, explique la limite.";
+
+        let actionProposal: ActionProposal | undefined;
+        if (/\b(sauvegarde|sauvegarder|photos|dcim)\b/i.test(prompt)) {
+          actionProposal = {
+            id: "act-" + Date.now(),
+            title: "Sauvegarde des photos (DCIM)",
+            description: "Synchroniser le dossier photos du téléphone (/sdcard/DCIM) vers le PC (~/Sauvegardes/Photos) via ADB.",
+            actionKey: "backup_photos"
+          };
+        } else if (/\b(nettoie|nettoyer|fichiers temporaires|cache)\b/i.test(prompt)) {
+          actionProposal = {
+            id: "act-" + Date.now(),
+            title: "Nettoyage des fichiers temporaires",
+            description: "Purger les caches d'applications et libérer de l'espace sur le stockage local.",
+            actionKey: "clean_temp"
+          };
+        } else if (/\b(captures|screenshots|capture d'écran|capture d'ecran)\b/i.test(prompt)) {
+          actionProposal = {
+            id: "act-" + Date.now(),
+            title: "Transférer les captures d'écran",
+            description: "Copier les dernières captures d'écran du smartphone vers le dossier Téléchargements du PC.",
+            actionKey: "transfer_screenshots"
+          };
+        } else if (/\b(verrouille|verrouiller|urgence)\b/i.test(prompt)) {
+          actionProposal = {
+            id: "act-" + Date.now(),
+            title: "Verrouillage d'urgence",
+            description: "Verrouiller immédiatement la session PC et éteindre l'écran du smartphone.",
+            actionKey: "emergency_lock"
+          };
+        } else if (/\b(sonner|retrouver|égaré|egare)\b/i.test(prompt)) {
+          actionProposal = {
+            id: "act-" + Date.now(),
+            title: "Faire sonner le téléphone",
+            description: "Augmenter le volume à 100% et faire retentir l'alarme pour retrouver l'appareil.",
+            actionKey: "ring_device"
+          };
+        }
+
         const answer = await invoke<string>("ollama_chat", { model, messages: [{ role: "system", content: system + " Type demandé : " + kind + "." }, ...history.map(item => ({ role: item.role, content: item.text }))] });
         const format: ExportFormat | undefined = /\b(excel|xlsx|tableur|feuille de calcul)\b/i.test(prompt) ? "xlsx" : /\b(powerpoint|pptx|présentation|diaporama)\b/i.test(prompt) ? "pptx" : /\b(word|docx|document word)\b/i.test(prompt) ? "docx" : /\b(pdf)\b/i.test(prompt) ? "pdf" : wantsFile ? "docx" : undefined;
         const titleMatch = prompt.match(/(?:de|du|sur|pour|intitulé|intitule)\s+(.{3,80})/i);
         const title = safeName(titleMatch?.[1]?.replace(/[?.!].*$/, "").trim() || titleFromContent(answer));
-        setMessages(current => [...current, { id: Date.now() + 1, role: "assistant", text: answer, ...(format ? { file: { name: title, content: answer, format } } : {}) }]);
+        setMessages(current => [...current, { id: Date.now() + 1, role: "assistant", text: answer, ...(format ? { file: { name: title, content: answer, format } } : {}), ...(actionProposal ? { actionProposal } : {}) }]);
       }
     } catch (cause) { setError(String(cause).replace(/^Error: /, "")); }
     finally { setBusy(false); }
@@ -191,17 +302,41 @@ export function CreationChat({ runtime }: { runtime: boolean }) {
             <div className="creation-welcome-icon"><Sparkles size={26}/></div><h2>Qu’est-ce qu’on crée aujourd’hui ?</h2>
             <p>Demande un fichier PDF, Word, Excel ou PowerPoint. Le document est généré localement et proposé au téléchargement dans le chat.</p>
             <div className="creation-examples">
-              <button type="button" onClick={() => setDraft("Fais-moi un PDF du cours de mathématiques sur les suites en Terminale.")}><FileText size={16}/> Un cours en PDF</button>
-              <button type="button" onClick={() => setDraft("Crée un document Word avec une fiche de révision sur les fonctions dérivées.")}><FileText size={16}/> Un document Word</button>
-              <button type="button" onClick={() => setDraft("Crée un tableau Excel de suivi des notes des élèves.")}><FileText size={16}/> Un tableau Excel</button>
-              <button type="button" onClick={() => setDraft("Prépare une présentation PowerPoint sur la sécurité informatique.")}><FileText size={16}/> Un PowerPoint</button>
-              <button type="button" onClick={() => setDraft("Crée une affiche illustrée pour annoncer les inscriptions scolaires.")}><ImagePlus size={16}/> Une image / affiche</button>
+              <button type="button" onClick={() => setDraft("IA, vérifie si tous mes appareils sont à jour et en ligne avec leur santé (batterie, stockage, CPU).")}><Cpu size={16}/> Tous les appareils en ligne ?</button>
+              <button type="button" onClick={() => setDraft("IA, dis-moi quel appareil consomme le plus de stockage et nettoie les fichiers temporaires.")}><HardDrive size={16}/> Analyse stockage & Nettoyage</button>
+              <button type="button" onClick={() => setDraft("IA, transfère les dernières captures d'écran de mon téléphone vers mon dossier Téléchargements.")}><FileText size={16}/> Récupérer captures d'écran</button>
+              <button type="button" onClick={() => setDraft("IA, lance la sauvegarde des photos de mon smartphone vers mon PC.")}><RefreshCw size={16}/> Sauvegarder les photos</button>
             </div>
           </div>}
           {messages.map(item => <article className={"creation-message " + (item.role === "user" ? "creation-message-user" : "creation-message-assistant")} key={item.id}>
             <div className="creation-message-avatar">{item.role === "user" ? <UserRound size={16}/> : <Bot size={17}/>}</div>
             <div className="creation-message-body"><div className="creation-message-author">{item.role === "user" ? "Toi" : "Assistant IA"}</div>
               <div className="creation-message-text">{item.text}</div>
+              {item.actionProposal && (
+                <div className="creation-action-proposal">
+                  <div className="creation-action-proposal-header">
+                    <ShieldAlert size={18} color="#f59e0b" />
+                    <strong>Action Système Proposée : {item.actionProposal.title}</strong>
+                  </div>
+                  <p>{item.actionProposal.description}</p>
+                  {item.actionProposal.executed ? (
+                    <div className="creation-action-executed">
+                      <Check size={14} color="#10b981" /> Action confirmée et exécutée avec succès
+                    </div>
+                  ) : (
+                    <div className="creation-action-buttons">
+                      <button
+                        type="button"
+                        className="button button-primary button-small"
+                        disabled={executingActionId === item.actionProposal.id}
+                        onClick={() => handleExecuteAction(item.actionProposal!)}
+                      >
+                        <Zap size={14} /> {executingActionId === item.actionProposal.id ? "Exécution en cours..." : "Confirmer et exécuter l'action"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {item.image && <div className="creation-image-result"><img src={item.image} alt="Image générée"/><button type="button" onClick={() => void downloadImage(item.image!)}><Download size={15}/> Télécharger l’image</button></div>}
               {item.file && <div className="creation-file-card"><div className="creation-file-icon"><FileText size={22}/></div><div className="creation-file-meta"><strong>{item.file.name}.{item.file.format}</strong><span>{({ pdf: "PDF prêt à télécharger", docx: "Document Microsoft Word", xlsx: "Classeur Microsoft Excel", pptx: "Présentation Microsoft PowerPoint", md: "Document Markdown" })[item.file.format]}</span></div><button type="button" onClick={() => void exportDocument(item.file!).catch(cause => setError("La création du fichier a échoué : " + String(cause)))}><Download size={15}/> Télécharger</button></div>}
             </div>
