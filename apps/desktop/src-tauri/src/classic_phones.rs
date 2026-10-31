@@ -200,6 +200,19 @@ pub fn classic_mtp_copy_to(source: String, uri: String) -> Result<ClassicOperati
     Ok(ClassicOperationResult { ok: true, output })
 }
 
+#[tauri::command]
+pub fn classic_serial_ports() -> Result<Vec<String>, String> {
+    let entries = fs::read_dir("/dev").map_err(|e| format!("Impossible de lire /dev : {e}"))?;
+    let mut ports = entries.flatten().filter_map(|entry| {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with("ttyUSB") || name.starts_with("ttyACM") || name.starts_with("ttyS") {
+            Some(format!("/dev/{name}"))
+        } else { None }
+    }).collect::<Vec<_>>();
+    ports.sort();
+    Ok(ports)
+}
+
 fn gammu_config_for(device: &str) -> Result<std::path::PathBuf, String> {
     if !(device.starts_with("/dev/ttyUSB") || device.starts_with("/dev/ttyACM") || device.starts_with("/dev/ttyS")) {
         return Err("Port refusé. Utilise /dev/ttyUSB*, /dev/ttyACM* ou /dev/ttyS*.".into());
