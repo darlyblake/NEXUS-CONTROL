@@ -42,7 +42,7 @@ fn detect_brand(manufacturer: &str, product: &str, vendor: &str) -> String {
     else if text.contains("tecno") { "TECNO".into() }
     else if text.contains("samsung") || vendor == "04e8" { "Samsung".into() }
     else if text.contains("maxcom") { "Maxcom".into() }
-    else if vendor == "1782" { "itel / Unisoc (à confirmer)".into() }
+    else if vendor == "1782" { "Unisoc (marque à confirmer)".into() }
     else { "Autre marque / non identifiée".into() }
 }
 
@@ -156,7 +156,10 @@ pub fn get_classic_phone_tools() -> Vec<ClassicPhoneTool> {
     checks.iter().map(|(id, label, detail)| ClassicPhoneTool {
         id: (*id).to_string(),
         label: (*label).to_string(),
-        installed: Command::new("sh").arg("-c").arg(format!("command -v {} >/dev/null 2>&1", id)).status().map(|status| status.success()).unwrap_or(false),
+        installed: {
+            let finder = if cfg!(target_os = "windows") { "where.exe" } else { "which" };
+            Command::new(finder).arg(id).output().map(|output| output.status.success()).unwrap_or(false)
+        },
         detail: (*detail).to_string(),
     }).collect()
 }
