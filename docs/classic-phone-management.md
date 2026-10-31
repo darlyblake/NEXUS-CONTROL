@@ -47,7 +47,7 @@ Ajouter à NEXUS CONTROL Desktop un connecteur USB Linux pour les téléphones �
 Dépendances Ubuntu : `gvfs-backends gvfs-fuse libmtp-runtime`. Le téléphone doit être déverrouillé et autoriser le mode transfert.
 
 ### Gammu
-- Identification d'un port modem avec `gammu --identify`.
+- Détection des ports `/dev/ttyUSB*`, `/dev/ttyACM*`, `/dev/ttyS*` et identification avec `gammu --identify`.
 - Lecture des contacts de la mémoire téléphone (`ME`) ou SIM (`SM`).
 - Lecture des SMS avec `--getallsms`.
 - Configuration temporaire protégée en permissions 0600 et supprimée après l'opération.
