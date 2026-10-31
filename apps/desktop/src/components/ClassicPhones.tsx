@@ -142,7 +142,47 @@ export function ClassicPhones({ runtime, onNotice }: { runtime: boolean; onNotic
       </div>)}</div>
     </section>
 
-    <div className="classic-notice"><MessageSquare size={17}/><div><strong>Contacts et SMS</strong><p>Ces données ne sont accessibles que si le téléphone expose un protocole documenté et autorise l'accès. Gammu ne fonctionne pas avec tous les téléphones à touches.</p></div></div>
-    <div className="classic-notice"><Download size={17}/><div><strong>Maintenance / firmware</strong><p>Le flashage sera ajouté par adaptateur constructeur, avec vérification stricte du modèle, du firmware, de la signature et confirmation avant toute écriture. Aucun firmware générique ne sera proposé.</p></div></div>
+    <section className="panel classic-panel">
+      <div className="panel-header"><div><h3>Transfert de fichiers MTP</h3><p>Parcours et copie via GVFS. Le téléphone doit être déverrouillé et autoriser le transfert.</p></div><HardDrive size={19}/></div>
+      <div className="classic-form-grid">
+        <label>URI du téléphone<input value={mtpUri} onChange={e=>setMtpUri(e.target.value)} placeholder="mtp://[usb:001,016]/"/></label>
+        <button className="button button-secondary" disabled={operationBusy} onClick={() => void runOperation("classic_mtp_mounts",{},"mtp")}><Usb size={15}/> Voir les montages</button>
+        <button className="button button-secondary" disabled={operationBusy || !mtpUri} onClick={() => void runOperation("classic_mtp_list",{uri:mtpUri},"mtp")}><FolderOpen size={15}/> Parcourir l'URI</button>
+        <label>Chemin local<input value={localPath} onChange={e=>setLocalPath(e.target.value)} placeholder="/home/utilisateur/Images/photo.jpg"/></label>
+        <label>URI distante du fichier ou dossier<input value={remotePath} onChange={e=>setRemotePath(e.target.value)} placeholder="mtp://.../Internal shared storage/"/></label>
+        <div className="classic-actions">
+          <button className="button button-secondary" disabled={operationBusy || !remotePath || !localPath} onClick={() => void runOperation("classic_mtp_copy_from",{uri:remotePath,destination:localPath},"mtp")}><Download size={15}/> Téléphone vers Ubuntu</button>
+          <button className="button button-secondary" disabled={operationBusy || !localPath || !remotePath} onClick={() => void runOperation("classic_mtp_copy_to",{source:localPath,uri:remotePath},"mtp")}><Send size={15}/> Ubuntu vers téléphone</button>
+        </div>
+      </div>
+      <pre className="classic-output">{mtpListing || "Les montages, fichiers et transferts apparaîtront ici."}</pre>
+      <p className="classic-help">Ubuntu : sudo apt install gvfs-backends gvfs-fuse libmtp-runtime. Récupère l'URI MTP depuis les montages affichés ou ton gestionnaire de fichiers.</p>
+    </section>
+    <section className="panel classic-panel">
+      <div className="panel-header"><div><h3>Contacts et SMS — Gammu</h3><p>Lecture via un port modem AT compatible. Une interface MTP seule ne donne pas accès aux contacts ni aux SMS.</p></div><Contact size={19}/></div>
+      <div className="classic-form-grid">
+        <label>Port série<input value={serialPort} onChange={e=>setSerialPort(e.target.value)} placeholder="/dev/ttyUSB0"/></label>
+        <button className="button button-secondary" disabled={operationBusy || !serialPort} onClick={() => void runOperation("classic_gammu_identify",{device:serialPort},"gammu")}><PhoneCall size={15}/> Identifier</button>
+        <label>Mémoire contacts<select value={memory} onChange={e=>setMemory(e.target.value)}><option value="ME">Téléphone (ME)</option><option value="SM">Carte SIM (SM)</option></select></label>
+        <div className="classic-actions">
+          <button className="button button-secondary" disabled={operationBusy || !serialPort} onClick={() => void runOperation("classic_gammu_read_contacts",{device:serialPort,memory},"gammu")}><Save size={15}/> Lire contacts</button>
+          <button className="button button-secondary" disabled={operationBusy || !serialPort} onClick={() => void runOperation("classic_gammu_read_sms",{device:serialPort},"gammu")}><MessageSquare size={15}/> Lire SMS</button>
+        </div>
+      </div>
+      <pre className="classic-output">{gammuOutput || "Les résultats Gammu apparaîtront ici."}</pre>
+      <p className="classic-help">Ubuntu : sudo apt install gammu. Le téléphone doit exposer un modem AT et le compte utilisateur doit avoir accès au port série. Ces opérations sont en lecture seule.</p>
+    </section>
+    <section className="panel classic-panel">
+      <div className="panel-header"><div><h3>Maintenance et validation firmware</h3><p>Vérifie le modèle et l'empreinte du paquet avant toute intervention constructeur.</p></div><ShieldCheck size={19}/></div>
+      <div className="classic-form-grid">
+        <label>Modèle exact détecté<input value={connectedModel} onChange={e=>setConnectedModel(e.target.value)} placeholder="Référence exacte de l'appareil"/></label>
+        <label>Modèle annoncé par le firmware<input value={firmwareModel} onChange={e=>setFirmwareModel(e.target.value)} placeholder="Référence exacte du paquet"/></label>
+        <label>Chemin du fichier firmware<input value={firmwareFile} onChange={e=>setFirmwareFile(e.target.value)} placeholder="/home/utilisateur/Téléchargements/firmware.bin"/></label>
+        <label>SHA-256 officiel attendu<input value={firmwareHash} onChange={e=>setFirmwareHash(e.target.value)} placeholder="64 caractères hexadécimaux"/></label>
+        <button className="button button-secondary" disabled={operationBusy || !firmwareFile || !connectedModel || !firmwareModel || !firmwareHash} onClick={() => void runFirmwareCheck()}><FileCheck2 size={15}/> Vérifier le firmware</button>
+      </div>
+      <pre className="classic-output">{maintenanceOutput || "Aucun contrôle effectué. Cette vérification ne flashe jamais le téléphone."}</pre>
+      <div className="classic-notice"><ShieldCheck size={17}/><div><strong>Flashage non activé</strong><p>Le contrôle vérifie l'égalité exacte des modèles saisis et le SHA-256. Il ne prouve pas la signature constructeur. Aucun flashage générique n'est lancé : il faut un adaptateur validé pour chaque modèle/chipset et un firmware officiel.</p></div></div>
+    </section>
   </div>;
 }
