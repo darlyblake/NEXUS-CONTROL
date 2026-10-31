@@ -33,3 +33,32 @@ Ajouter à NEXUS CONTROL Desktop un connecteur USB Linux pour les téléphones �
 - Ne pas afficher ni journaliser le numéro de série USB complet.
 - Ne jamais envoyer une commande propriétaire inconnue.
 - Pas d'écriture firmware si modèle, chipset, région et version ne concordent pas.
+
+
+## Deuxième livraison : opérations locales
+
+### MTP / GVFS
+- `classic_mtp_mounts` liste les montages GVFS disponibles.
+- `classic_mtp_list` parcourt une URI MTP ou gphoto2.
+- `classic_mtp_copy_from` copie un fichier du téléphone vers un chemin local.
+- `classic_mtp_copy_to` envoie un fichier local vers une URI distante.
+- Les commandes passent par `gio` sans shell ; les URI distantes sont limitées aux schémas `mtp://` et `gphoto2://`.
+
+Dépendances Ubuntu : `gvfs-backends gvfs-fuse libmtp-runtime`. Le téléphone doit être déverrouillé et autoriser le mode transfert.
+
+### Gammu
+- Détection des ports `/dev/ttyUSB*`, `/dev/ttyACM*`, `/dev/ttyS*` et identification avec `gammu --identify`.
+- Lecture des contacts de la mémoire téléphone (`ME`) ou SIM (`SM`).
+- Lecture des SMS avec `--getallsms`.
+- Configuration temporaire protégée en permissions 0600 et supprimée après l'opération.
+- Aucune commande d'envoi, suppression ou restauration n'est exposée.
+
+Un port série AT compatible est indispensable. L'interface USB MTP seule ne donne pas accès aux contacts/SMS.
+
+### Maintenance / firmware
+- Contrôle de l'existence du paquet.
+- Comparaison exacte du modèle saisi manuellement (référence sur étiquette) et du modèle déclaré dans le paquet. Le modèle n'est pas encore lu automatiquement depuis le téléphone.
+- Vérification SHA-256 via `sha256sum`.
+- Le résultat indique explicitement qu'aucun flashage n'a été réalisé.
+- Le contrôle d'empreinte ne prouve pas à lui seul l'authenticité d'un firmware : l'empreinte doit venir d'une source constructeur de confiance.
+- Pas de flashage générique : adaptateur par chipset/modèle, firmware officiel, validation de signature et procédure physique de récupération sont nécessaires avant d'autoriser l'écriture.

@@ -145,6 +145,8 @@ pub fn scan_classic_phones() -> Result<Vec<ClassicPhoneDevice>, String> {
 pub fn get_classic_phone_tools() -> Vec<ClassicPhoneTool> {
     let checks = [
         ("lsusb", "usbutils / lsusb", "Inventaire des périphériques USB"),
+        ("gio", "GIO / GVFS", "Montage, navigation et copie MTP/gphoto2"),
+        ("sha256sum", "coreutils / sha256sum", "Vérification SHA-256 des paquets firmware"),
         ("udevadm", "udev / udevadm", "Informations et événements USB Linux"),
         ("mtp-detect", "libmtp", "Diagnostic des interfaces MTP compatibles"),
         ("gammu", "Gammu", "SMS, contacts et modem — uniquement sur les modèles/protocoles compatibles"),
@@ -162,4 +164,103 @@ pub fn get_classic_phone_tools() -> Vec<ClassicPhoneTool> {
         },
         detail: (*detail).to_string(),
     }).collect()
+}
+
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassicOperationResult { pub ok: bool, pub output: String }
+
+fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
+    let output = Command::new(program).args(args).output().map_err(|e| format!("Impossible de lancer {program} : {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() { return Err(format!("{} a échoué : {}", program, if stderr.trim().is_empty() { stdout } else { stderr })); }
+    Ok(if stdout.trim().is_empty() { stderr } else { stdout })
+}
+fn valid_remote_uri(uri: &str) -> bool { uri.starts_with("mtp://") || uri.starts_with("gphoto2://") }
+
+#[tauri::command]
+pub fn classic_mtp_mounts() -> Result<String, String> { run_command("gio", &["mount", "-li"]) }
+#[tauri::command]
+pub fn classic_mtp_list(uri: String) -> Result<String, String> {
+    if !valid_remote_uri(&uri) { return Err("URI refusée : utilise mtp:// ou gphoto2://.".into()); }
+    run_command("gio", &["list", "--attributes=standard::name,standard::type,standard::size", &uri])
+}
+#[tauri::command]
+pub fn classic_mtp_copy_from(uri: String, destination: String) -> Result<ClassicOperationResult, String> {
+    if !valid_remote_uri(&uri) { return Err("La source doit être une URI MTP ou gphoto2.".into()); }
+    if destination.trim().is_empty() { return Err("Chemin de destination local obligatoire.".into()); }
+    let output = run_command("gio", &["copy", "--progress", &uri, &destination])?;
+    Ok(ClassicOperationResult { ok: true, output })
+}
+#[tauri::command]
+pub fn classic_mtp_copy_to(source: String, uri: String) -> Result<ClassicOperationResult, String> {
+    if !valid_remote_uri(&uri) { return Err("La destination doit être une URI MTP ou gphoto2.".into()); }
+    if source.trim().is_empty() || !Path::new(&source).is_file() { return Err("Le fichier source local n'existe pas.".into()); }
+    let output = run_command("gio", &["copy", "--progress", &source, &uri])?;
+    Ok(ClassicOperationResult { ok: true, output })
+}
+
+#[tauri::command]
+pub fn classic_serial_ports() -> Result<Vec<String>, String> {
+    let entries = fs::read_dir("/dev").map_err(|e| format!("Impossible de lire /dev : {e}"))?;
+    let mut ports = entries.flatten().filter_map(|entry| {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with("ttyUSB") || name.starts_with("ttyACM") || name.starts_with("ttyS") {
+            Some(format!("/dev/{name}"))
+        } else { None }
+    }).collect::<Vec<_>>();
+    ports.sort();
+    Ok(ports)
+}
+
+fn gammu_config_for(device: &str) -> Result<std::path::PathBuf, String> {
+    if !(device.starts_with("/dev/ttyUSB") || device.starts_with("/dev/ttyACM") || device.starts_with("/dev/ttyS")) {
+        return Err("Port refusé. Utilise /dev/ttyUSB*, /dev/ttyACM* ou /dev/ttyS*.".into());
+    }
+    if !Path::new(device).exists() { return Err("Le port série sélectionné n'existe pas.".into()); }
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_nanos();
+    let path = std::env::temp_dir().join(format!("nexus-gammu-{}-{stamp}.ini", std::process::id()));
+    fs::write(&path, format!("[gammu]\ndevice = {device}\nconnection = at\n")).map_err(|e| format!("Configuration Gammu impossible : {e}"))?;
+    #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?; }
+    Ok(path)
+}
+fn run_gammu_read(device: &str, args: &[&str]) -> Result<String, String> {
+    let config = gammu_config_for(device)?;
+    let result = Command::new("gammu").arg("--config").arg(&config).args(args).output().map_err(|e| format!("Gammu indisponible : {e}"));
+    let _ = fs::remove_file(&config);
+    let output = result?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() { return Err(format!("Gammu n'a pas communiqué avec {device} : {}", if stderr.trim().is_empty() { stdout } else { stderr })); }
+    Ok(if stdout.trim().is_empty() { stderr } else { stdout })
+}
+#[tauri::command]
+pub fn classic_gammu_identify(device: String) -> Result<String, String> { run_gammu_read(&device, &["--identify"]) }
+#[tauri::command]
+pub fn classic_gammu_read_contacts(device: String, memory: String) -> Result<String, String> {
+    if memory != "ME" && memory != "SM" { return Err("Mémoire autorisée : ME (téléphone) ou SM (SIM).".into()); }
+    run_gammu_read(&device, &["--getallmemory", &memory])
+}
+#[tauri::command]
+pub fn classic_gammu_read_sms(device: String) -> Result<String, String> { run_gammu_read(&device, &["--getallsms"]) }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirmwareValidation { pub file: String, pub requested_model: String, pub sha256: String, pub expected_sha256: String, pub valid: bool, pub status: String }
+#[tauri::command]
+pub fn classic_validate_firmware(file: String, connected_model: String, expected_model: String, expected_sha256: String) -> Result<FirmwareValidation, String> {
+    if connected_model.trim().is_empty() || expected_model.trim().is_empty() { return Err("Le modèle détecté et le modèle attendu sont obligatoires.".into()); }
+    if connected_model.trim() != expected_model.trim() { return Err(format!("Modèle incompatible : « {} » contre « {} ».", connected_model, expected_model)); }
+    if expected_sha256.len() != 64 || !expected_sha256.chars().all(|c| c.is_ascii_hexdigit()) { return Err("Le SHA-256 attendu doit contenir 64 caractères hexadécimaux.".into()); }
+    let path = Path::new(&file);
+    if !path.is_file() { return Err("Le fichier firmware n'existe pas.".into()); }
+    let output = Command::new("sha256sum").arg(path).output().map_err(|e| format!("sha256sum indisponible : {e}"))?;
+    if !output.status.success() { return Err(String::from_utf8_lossy(&output.stderr).to_string()); }
+    let actual = String::from_utf8_lossy(&output.stdout).split_whitespace().next().unwrap_or("").to_lowercase();
+    let expected = expected_sha256.to_lowercase();
+    let valid = actual == expected;
+    Ok(FirmwareValidation { file, requested_model: expected_model, sha256: actual, expected_sha256: expected, valid,
+        status: if valid { "Modèle et empreinte concordants. Paquet contrôlé ; aucun flashage effectué.".into() } else { "Empreinte SHA-256 incorrecte : paquet refusé. Aucune écriture effectuée.".into() } })
 }
