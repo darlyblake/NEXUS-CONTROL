@@ -57,7 +57,7 @@ Un port série AT compatible est indispensable. L'interface USB MTP seule ne don
 
 ### Maintenance / firmware
 - Contrôle de l'existence du paquet.
-- Comparaison exacte du modèle saisi et du modèle déclaré dans le paquet.
+- Comparaison exacte du modèle saisi manuellement (référence sur étiquette) et du modèle déclaré dans le paquet. Le modèle n'est pas encore lu automatiquement depuis le téléphone.
 - Vérification SHA-256 via `sha256sum`.
 - Le résultat indique explicitement qu'aucun flashage n'a été réalisé.
 - Le contrôle d'empreinte ne prouve pas à lui seul l'authenticité d'un firmware : l'empreinte doit venir d'une source constructeur de confiance.
