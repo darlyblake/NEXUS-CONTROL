@@ -1990,6 +1990,7 @@ fn main() {
             classic_phones::classic_mtp_list,
             classic_phones::classic_mtp_copy_from,
             classic_phones::classic_mtp_copy_to,
+            classic_phones::classic_serial_ports,
             classic_phones::classic_gammu_identify,
             classic_phones::classic_gammu_read_contacts,
             classic_phones::classic_gammu_read_sms,
