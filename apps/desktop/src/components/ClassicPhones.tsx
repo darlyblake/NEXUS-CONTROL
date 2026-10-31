@@ -177,7 +177,7 @@ export function ClassicPhones({ runtime, onNotice }: { runtime: boolean; onNotic
     <section className="panel classic-panel">
       <div className="panel-header"><div><h3>Maintenance et validation firmware</h3><p>Vérifie le modèle et l'empreinte du paquet avant toute intervention constructeur.</p></div><ShieldCheck size={19}/></div>
       <div className="classic-form-grid">
-        <label>Modèle exact détecté<input value={connectedModel} onChange={e=>setConnectedModel(e.target.value)} placeholder="Référence exacte de l'appareil"/></label>
+        <label>Modèle exact du téléphone (étiquette)<input value={connectedModel} onChange={e=>setConnectedModel(e.target.value)} placeholder="Référence exacte de l'appareil"/></label>
         <label>Modèle annoncé par le firmware<input value={firmwareModel} onChange={e=>setFirmwareModel(e.target.value)} placeholder="Référence exacte du paquet"/></label>
         <label>Chemin du fichier firmware<input value={firmwareFile} onChange={e=>setFirmwareFile(e.target.value)} placeholder="/home/utilisateur/Téléchargements/firmware.bin"/></label>
         <label>SHA-256 officiel attendu<input value={firmwareHash} onChange={e=>setFirmwareHash(e.target.value)} placeholder="64 caractères hexadécimaux"/></label>
