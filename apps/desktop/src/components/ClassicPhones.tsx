@@ -23,6 +23,7 @@ export function ClassicPhones({ runtime, onNotice }: { runtime: boolean; onNotic
   const [localPath, setLocalPath] = useState("");
   const [remotePath, setRemotePath] = useState("");
   const [serialPort, setSerialPort] = useState("/dev/ttyUSB0");
+  const [serialPorts, setSerialPorts] = useState<string[]>([]);
   const [gammuOutput, setGammuOutput] = useState("");
   const [memory, setMemory] = useState("ME");
   const [firmwareFile, setFirmwareFile] = useState("");
@@ -161,7 +162,8 @@ export function ClassicPhones({ runtime, onNotice }: { runtime: boolean; onNotic
     <section className="panel classic-panel">
       <div className="panel-header"><div><h3>Contacts et SMS — Gammu</h3><p>Lecture via un port modem AT compatible. Une interface MTP seule ne donne pas accès aux contacts ni aux SMS.</p></div><Contact size={19}/></div>
       <div className="classic-form-grid">
-        <label>Port série<input value={serialPort} onChange={e=>setSerialPort(e.target.value)} placeholder="/dev/ttyUSB0"/></label>
+        <label>Port série<select value={serialPort} onChange={e=>setSerialPort(e.target.value)}><option value="">Choisir un port</option>{serialPorts.map(port=><option key={port} value={port}>{port}</option>)}</select></label>
+        <button className="button button-secondary" disabled={operationBusy} onClick={async()=>{try{const ports=await invoke<string[]>("classic_serial_ports");setSerialPorts(ports);if(ports.length)setSerialPort(ports[0]);setGammuOutput(ports.length?ports.join("\\n"):"Aucun port série USB détecté dans /dev.");}catch(e){setGammuOutput(String(e));}}}><Usb size={15}/> Détecter les ports</button>
         <button className="button button-secondary" disabled={operationBusy || !serialPort} onClick={() => void runOperation("classic_gammu_identify",{device:serialPort},"gammu")}><PhoneCall size={15}/> Identifier</button>
         <label>Mémoire contacts<select value={memory} onChange={e=>setMemory(e.target.value)}><option value="ME">Téléphone (ME)</option><option value="SM">Carte SIM (SM)</option></select></label>
         <div className="classic-actions">
