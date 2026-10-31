@@ -145,6 +145,8 @@ pub fn scan_classic_phones() -> Result<Vec<ClassicPhoneDevice>, String> {
 pub fn get_classic_phone_tools() -> Vec<ClassicPhoneTool> {
     let checks = [
         ("lsusb", "usbutils / lsusb", "Inventaire des périphériques USB"),
+        ("gio", "GIO / GVFS", "Montage, navigation et copie MTP/gphoto2"),
+        ("sha256sum", "coreutils / sha256sum", "Vérification SHA-256 des paquets firmware"),
         ("udevadm", "udev / udevadm", "Informations et événements USB Linux"),
         ("mtp-detect", "libmtp", "Diagnostic des interfaces MTP compatibles"),
         ("gammu", "Gammu", "SMS, contacts et modem — uniquement sur les modèles/protocoles compatibles"),
